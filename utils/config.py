@@ -29,18 +29,7 @@ MAX_STEPS    = 150
 FAILURE_PROB  = 0.03
 MAX_FAILURES  = 1
 
-# ── Coordination reward ───────────────────────────────────────────────
-COORDINATION_BONUS = 0.15
-
 # ── Evolution engine ──────────────────────────────────────────────────
 EVOLVE_EVERY  = 50
 EVOLVE_POP    = 8
 EVOLVE_SIGMA  = 0.02
-
-# ── Meta adapter ─────────────────────────────────────────────────────
-META_LR = 3e-4
-
-# ── Backwards compat ─────────────────────────────────────────────────
-LR = LR_ACTOR
-NOISE_SIGMA = 0.0   # SAC doesn't use OU noise
-NOISE_DECAY = 1.0

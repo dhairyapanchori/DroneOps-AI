@@ -16,7 +16,6 @@ Curriculum:
 
 import copy
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
@@ -32,8 +31,8 @@ from utils.replay_buffer import ReplayBuffer
 from utils.config import *
 from metrics.logger import Metrics
 
-UPDATE_EVERY       = 4   # update every 4 env steps — critic stabilises between updates
-UPDATES_PER_STEP   = 2 # gradient steps per env step
+UPDATE_EVERY     = 4   # update every 4 env steps — critic stabilises between updates
+UPDATES_PER_STEP = 2   # gradient steps per update round
 
 
 class Trainer:
@@ -90,18 +89,28 @@ class Trainer:
     # ── Fusion pipeline ───────────────────────────────────────────────
 
     def _fuse(self, s_t, meta_net, gnn_net, trans_net):
+        """Build the fused per-drone embedding: [adapted | gnn | transformer].
+
+        s_t: (N, STATE_DIM) or (B, N, STATE_DIM) → same leading dims, FUSED_DIM.
+        """
         adapted = meta_net(s_t)
         gnn_ctx = gnn_net(adapted)
         mission = trans_net(adapted)
         return torch.cat([adapted, gnn_ctx, mission], dim=-1)
 
     def _soft_update(self, online, target):
+        """Polyak-average online parameters into the target network (rate TAU)."""
         for po, pt in zip(online.parameters(), target.parameters()):
             pt.data.copy_(TAU * po.data + (1.0 - TAU) * pt.data)
 
     # ── SAC update ────────────────────────────────────────────────────
 
     def _update(self):
+        """One SAC gradient step: critic → actor → temperature → target sync.
+
+        Returns (critic_loss, actor_loss, alpha) or (None, None, None)
+        while the replay buffer is still warming up.
+        """
         if len(self.buf) < WARMUP_STEPS:
             return None, None, None
 
@@ -165,6 +174,10 @@ class Trainer:
     # ── Evolution fitness rollout ─────────────────────────────────────
 
     def _fitness(self, actor):
+        """Roll out `actor` deterministically for one episode; return mean reward.
+
+        Used by the EvolutionEngine to score mutated actor candidates.
+        """
         s    = self.env.reset()
         ep_r = 0.0
         done = False
@@ -180,6 +193,7 @@ class Trainer:
     # ── Main training loop ────────────────────────────────────────────
 
     def train(self):
+        """Full training run: curriculum episodes → SAC updates → evolution → save."""
         last_c_loss = last_a_loss = last_alpha = None
 
         for ep in tqdm(range(MAX_EPISODES)):

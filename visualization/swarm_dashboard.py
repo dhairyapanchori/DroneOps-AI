@@ -72,7 +72,7 @@ class SwarmDashboard:
                 sp.set_edgecolor("#333333")
 
         self._setup_panels()
-        plt.suptitle("🧬 Swarm Intelligence — MetaAdapter + GNN + Transformer + DDPG + Evolution",
+        plt.suptitle("🧬 Swarm Intelligence — MetaAdapter + GNN + Transformer + SAC + Evolution",
                      color="#00ff88", fontsize=10, fontweight="bold")
 
     # ── Fusion (mirrors trainer exactly) ─────────────────────────────
@@ -264,7 +264,7 @@ class SwarmDashboard:
     # ── Run ───────────────────────────────────────────────────────────
 
     def run(self, num_episodes=20, pause=0.04):
-        self.env.curriculum_ep = 225   # ← add this
+        self.env.curriculum_ep = 225   # full (Phase 3) difficulty for evaluation
         plt.ion()
         plt.show()
 
