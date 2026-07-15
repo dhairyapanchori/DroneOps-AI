@@ -54,7 +54,7 @@ class SwarmDashboard:
         self.episode_num     = 0
 
         self.fig = plt.figure(figsize=(15, 8), facecolor="#0d0d0d")
-        self.fig.canvas.manager.set_window_title("🧬 Swarm Intelligence — v5")
+        self.fig.canvas.manager.set_window_title("Swarm Intelligence — v5")
 
         gs = GridSpec(3, 3, figure=self.fig,
                       left=0.05, right=0.97, top=0.93, bottom=0.07,
@@ -72,7 +72,9 @@ class SwarmDashboard:
                 sp.set_edgecolor("#333333")
 
         self._setup_panels()
-        plt.suptitle("🧬 Swarm Intelligence — MetaAdapter + GNN + Transformer + SAC + Evolution",
+        # Plain-text title — emoji glyphs are missing from matplotlib's
+        # default font and spam glyph warnings on every canvas draw.
+        plt.suptitle("Swarm Intelligence — MetaAdapter + GNN + Transformer + SAC + Evolution",
                      color="#00ff88", fontsize=10, fontweight="bold")
 
     # ── Fusion (mirrors trainer exactly) ─────────────────────────────

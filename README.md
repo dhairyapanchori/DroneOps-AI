@@ -146,6 +146,8 @@ drone-swarm/
 │   └── logger.py               # Per-episode training metrics
 ├── visualization/
 │   └── swarm_dashboard.py      # Live matplotlib dashboard
+├── docs/
+│   └── assets/                 # Screenshots & media
 │
 ├── *_trained.pth               # Pretrained checkpoints (actor, critic, gnn, transformer, meta)
 ├── requirements.txt
@@ -233,6 +235,10 @@ With the included pretrained checkpoints, the swarm demonstrates:
 - ✅ **Obstacle-aware navigation** through ring, cross, hex, and star obstacle fields
 - ✅ **Failure resilience** — surviving drones re-cover targets after teammates go offline
 - ✅ Stable SAC training across all curriculum phases with automatic entropy tuning
+
+The full pipeline is verified end-to-end: training produces finite SAC losses and
+saves all five checkpoints, and both dashboards load the shipped checkpoints and
+render live episodes (tested on Windows and headless `Agg` backends).
 
 *Retrain any time with `python main.py` — full training takes well under an hour on a modern CPU.*
 

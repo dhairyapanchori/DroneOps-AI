@@ -281,7 +281,9 @@ class Trainer:
             )
 
             if last_c_loss is not None:
-                loss_str = f"  C={last_c_loss:.3f} A={last_a_loss:.3f} α={last_alpha:.3f}"
+                # ASCII-only console output — Windows terminals often use
+                # cp1252, which cannot encode Greek letters or emoji.
+                loss_str = f"  C={last_c_loss:.3f} A={last_a_loss:.3f} alpha={last_alpha:.3f}"
             else:
                 loss_str = "  [warmup]"
 
@@ -301,7 +303,7 @@ class Trainer:
                     if best_score > self.best_ep_reward:
                         self.best_ep_reward   = best_score
                         self.best_actor_state = copy.deepcopy(self.actor.state_dict())
-                    print(f"  [Evolution] ✅ Improved to {best_score:.2f}")
+                    print(f"  [Evolution] Improved to {best_score:.2f}")
                 else:
                     print(f"  [Evolution] No improvement (best mutant: {best_score:.2f})")
                 self.metrics.log_evolution(best_score)
