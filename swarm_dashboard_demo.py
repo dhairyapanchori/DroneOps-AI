@@ -18,27 +18,24 @@ Run:
 ================================================================================
 """
 
-import sys, os, time
+import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 from matplotlib.gridspec import GridSpec
 from matplotlib.patches import Circle
 from matplotlib.widgets import Button
 import torch
 
-from env.swarm_env import SwarmEnv, OBSTACLE_RADIUS, TARGET_RADIUS
+from env.swarm_env import (SwarmEnv, OBSTACLE_RADIUS, TARGET_RADIUS,
+                           OBSTACLE_PENALTY)
 from ml.marl.actor import Actor
 from ml.gnn.swarm_gnn import SwarmGNN
 from ml.transformer.mission_transformer import MissionTransformer
 from ml.meta.meta_adapter import MetaAdapter
 from utils.config import (NUM_DRONES, STATE_DIM, FUSED_DIM,
                            ACTION_DIM, MAX_STEPS)
-
-# ── Obstacle penalty constant (must match swarm_env.py) ──────────────────────
-OBSTACLE_PENALTY = 0.4
 
 # ── Scene definitions ─────────────────────────────────────────────────────────
 

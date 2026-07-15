@@ -7,6 +7,26 @@ Algorithm: Soft Actor-Critic (SAC)
   - Automatic temperature tuning (alpha) — no manual noise schedule
   - No Ornstein-Uhlenbeck noise needed — stochastic actor handles exploration
 
+Architecture — who learns and who doesn't
+  All six drones share ONE actor and ONE critic (parameter sharing).
+  Observations first pass through a fusion pipeline:
+
+      state (N,16) → MetaAdapter (FiLM) → GNN ┐
+                                   └→ Transformer ┴→ concat (N,144)
+
+  The three representation networks are FROZEN at initialisation and act as
+  fixed random feature encoders. Rationale: they are shared between actor and
+  critic, and letting both optimise them couples the two losses and causes
+  circular instability — fixed weights give the critic stationary targets.
+  Only the actor head, critic heads, and temperature alpha receive gradients.
+
+Three complementary selection pressures act on the actor:
+  1. SAC gradient steps (every UPDATE_EVERY env steps) — the main learner.
+  2. Best-actor snapshot: if an episode scores below 70% of the best seen,
+     the best weights are restored with small noise — a cheap collapse guard.
+  3. EvolutionEngine: every EVOLVE_EVERY episodes a (1+λ) ES mutates the
+     actor and keeps the champion — escapes local optima gradients can't.
+
 Curriculum:
   Phase 0 (ep   0–74):  No obstacles, close targets, no failures
   Phase 1 (ep  75–149): 2 obstacles, rare failures
@@ -16,7 +36,6 @@ Curriculum:
 
 import copy
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
@@ -32,8 +51,8 @@ from utils.replay_buffer import ReplayBuffer
 from utils.config import *
 from metrics.logger import Metrics
 
-UPDATE_EVERY       = 4   # update every 4 env steps — critic stabilises between updates
-UPDATES_PER_STEP   = 2 # gradient steps per env step
+UPDATE_EVERY     = 4   # update every 4 env steps — critic stabilises between updates
+UPDATES_PER_STEP = 2   # gradient steps per update round
 
 
 class Trainer:
@@ -90,24 +109,37 @@ class Trainer:
     # ── Fusion pipeline ───────────────────────────────────────────────
 
     def _fuse(self, s_t, meta_net, gnn_net, trans_net):
+        """Build the fused per-drone embedding: [adapted | gnn | transformer].
+
+        s_t: (N, STATE_DIM) or (B, N, STATE_DIM) → same leading dims, FUSED_DIM.
+        """
         adapted = meta_net(s_t)
         gnn_ctx = gnn_net(adapted)
         mission = trans_net(adapted)
         return torch.cat([adapted, gnn_ctx, mission], dim=-1)
 
     def _soft_update(self, online, target):
+        """Polyak-average online parameters into the target network (rate TAU)."""
         for po, pt in zip(online.parameters(), target.parameters()):
             pt.data.copy_(TAU * po.data + (1.0 - TAU) * pt.data)
 
     # ── SAC update ────────────────────────────────────────────────────
 
     def _update(self):
+        """One SAC gradient step: critic → actor → temperature → target sync.
+
+        Returns (critic_loss, actor_loss, alpha) or (None, None, None)
+        while the replay buffer is still warming up.
+        """
         if len(self.buf) < WARMUP_STEPS:
             return None, None, None
 
         s, a, r, ns, d = self.buf.sample(BATCH)
         B, N = BATCH, NUM_DRONES
 
+        # Un-flatten to (B, N, ·) so the fusion nets can pool across the
+        # swarm dimension, then re-flatten: each drone becomes an
+        # independent SAC sample that shares its swarm's context.
         s_r  = s.view(B, N, STATE_DIM)
         ns_r = ns.view(B, N, STATE_DIM)
 
@@ -117,6 +149,9 @@ class Trainer:
                                ).view(B * N, FUSED_DIM)
 
         # ── Critic update ─────────────────────────────────────────────
+        # Soft Bellman target: r + γ(1-d)·[min(Q1',Q2') - α·logπ(a'|s')]
+        # min over twin critics counters overestimation bias; the -α·logπ
+        # term folds the entropy objective into the value estimate.
         with torch.no_grad():
             next_a, next_logp = self.actor.sample(fused_ns)
             q1_next, q2_next  = self.critic_target(fused_ns, next_a)
@@ -165,6 +200,10 @@ class Trainer:
     # ── Evolution fitness rollout ─────────────────────────────────────
 
     def _fitness(self, actor):
+        """Roll out `actor` deterministically for one episode; return mean reward.
+
+        Used by the EvolutionEngine to score mutated actor candidates.
+        """
         s    = self.env.reset()
         ep_r = 0.0
         done = False
@@ -180,6 +219,7 @@ class Trainer:
     # ── Main training loop ────────────────────────────────────────────
 
     def train(self):
+        """Full training run: curriculum episodes → SAC updates → evolution → save."""
         last_c_loss = last_a_loss = last_alpha = None
 
         for ep in tqdm(range(MAX_EPISODES)):
@@ -215,7 +255,10 @@ class Trainer:
                 s     = ns
                 ep_r += r.mean()
 
-            # Track and possibly restore best actor
+            # Track and possibly restore best actor.
+            # Restore-with-noise (not plain restore) so the policy resumes
+            # exploring from the good region instead of retracing the exact
+            # trajectory that led to the collapse.
             if ep_r > self.best_ep_reward:
                 self.best_ep_reward   = ep_r
                 self.best_actor_state = copy.deepcopy(self.actor.state_dict())
@@ -238,7 +281,9 @@ class Trainer:
             )
 
             if last_c_loss is not None:
-                loss_str = f"  C={last_c_loss:.3f} A={last_a_loss:.3f} α={last_alpha:.3f}"
+                # ASCII-only console output — Windows terminals often use
+                # cp1252, which cannot encode Greek letters or emoji.
+                loss_str = f"  C={last_c_loss:.3f} A={last_a_loss:.3f} alpha={last_alpha:.3f}"
             else:
                 loss_str = "  [warmup]"
 
@@ -258,7 +303,7 @@ class Trainer:
                     if best_score > self.best_ep_reward:
                         self.best_ep_reward   = best_score
                         self.best_actor_state = copy.deepcopy(self.actor.state_dict())
-                    print(f"  [Evolution] ✅ Improved to {best_score:.2f}")
+                    print(f"  [Evolution] Improved to {best_score:.2f}")
                 else:
                     print(f"  [Evolution] No improvement (best mutant: {best_score:.2f})")
                 self.metrics.log_evolution(best_score)

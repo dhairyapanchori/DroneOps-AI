@@ -5,10 +5,10 @@ import copy
 
 class EvolutionEngine:
     """
-    Periodic evolutionary improvement on top of DDPG.
+    Periodic evolutionary improvement on top of gradient-based training (SAC).
 
     Role in training:
-        DDPG updates the actor every step via gradient descent.
+        SAC updates the actor every few steps via gradient descent.
         Every EVOLVE_EVERY episodes, the EvolutionEngine runs a separate
         evaluation pass: it creates mutated copies of the current actor,
         rolls each one out in the environment, and if any mutant scores
@@ -27,6 +27,7 @@ class EvolutionEngine:
         self.sigma    = sigma
 
     def _mutate(self, actor):
+        """Return a deep copy of `actor` with Gaussian noise (std=sigma) added."""
         mutant = copy.deepcopy(actor)
         with torch.no_grad():
             for p in mutant.parameters():

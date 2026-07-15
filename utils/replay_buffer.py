@@ -1,10 +1,18 @@
 import random
-import numpy as np
 from collections import deque
+
+import numpy as np
+import torch
 
 
 class ReplayBuffer:
-    """Simple replay buffer — no normalisation, rewards stable in [-3, 8]."""
+    """Uniform experience replay for full swarm transitions.
+
+    Each entry stores one environment step for the whole swarm:
+    (states, actions, rewards, next_states, dones), each with a
+    leading NUM_DRONES dimension. `sample` flattens the drone
+    dimension so every drone becomes an independent training sample.
+    """
 
     def __init__(self, size):
         self.buf = deque(maxlen=size)
@@ -13,7 +21,7 @@ class ReplayBuffer:
         self.buf.append((state, action, reward, next_state, done))
 
     def sample(self, batch_size):
-        import torch
+        """Sample `batch_size` swarm steps, flattened to per-drone tensors."""
         batch = random.sample(self.buf, batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
 

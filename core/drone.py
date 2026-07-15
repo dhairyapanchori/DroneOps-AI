@@ -1,3 +1,21 @@
+"""
+Single-drone model: point-mass kinematics, energy budget, and local sensing.
+
+Design notes
+------------
+- The drone is a 2D point mass: action[:2] is acceleration, integrated into
+  velocity then position each step. There is no drag or dt constant — the
+  velocity clip (±2) is what bounds top speed.
+- Energy drains in proportion to the *full* action norm each step and never
+  recovers; a drone at zero energy is permanently dead. This is what makes
+  wasteful control costly and enables the "energy crisis" failure mode.
+- Observations are deliberately local and normalised to roughly [-1, 1]:
+  a drone senses only its own kinematics/energy, distances to up to 5
+  neighbours, and the distance + coarse direction (sign only) of the single
+  nearest obstacle and target. The swarm-level picture is provided later by
+  the GNN/Transformer fusion pipeline, not by the raw observation.
+"""
+
 import numpy as np
 
 WORLD_BOUND = 12.0   # hard wall — drones cannot go beyond this
@@ -7,17 +25,25 @@ DIST_SCALE  = WORLD_BOUND * 2
 
 
 class Drone:
+    """A single drone: 2D point-mass kinematics, energy budget, local sensing."""
+
     def __init__(self, i):
         self.id = i
         self.reset()
 
     def reset(self):
+        """Respawn at a random position with zero velocity and full energy."""
         self.pos    = np.random.uniform(-8, 8, 2)
         self.vel    = np.zeros(2)
         self.energy = 1.0
         self.alive  = True
 
     def step(self, action):
+        """Apply one control step: accelerate, move, bounce off walls, drain energy.
+
+        Only action[:2] drives motion; the full action norm drains energy.
+        A drone whose energy reaches zero dies permanently.
+        """
         if not self.alive:
             return
 
@@ -39,6 +65,13 @@ class Drone:
             self.alive = False
 
     def state(self, neighbors, obstacles=None, targets=None):
+        """Build the 16-dim normalised observation vector.
+
+        Layout: [pos(2), vel(2), energy(1), neighbor dists(5),
+                 nearest obstacle dist(1), nearest target dist(1),
+                 target direction(2), obstacle direction(2)].
+        Dead drones observe all zeros.
+        """
         if not self.alive:
             return np.zeros(16, dtype=np.float32)
 

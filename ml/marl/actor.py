@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 LOG_STD_MIN = -5
@@ -10,7 +9,14 @@ LOG_STD_MAX = 2
 class SACActorNet(nn.Module):
     """
     SAC stochastic actor — outputs a Gaussian distribution over actions.
-    Uses reparameterisation trick for backprop through samples.
+
+    The tanh squash bounds actions to [-1, 1]; its log-det-Jacobian
+    correction in `sample` keeps the log-probabilities exact, which the
+    entropy term of SAC depends on. Uses the reparameterisation trick so
+    gradients flow through sampled actions into the network.
+
+    Heads are initialised near zero so the initial policy is a broad,
+    roughly centred Gaussian — uniform-ish early exploration.
     """
     def __init__(self, in_dim, action_dim):
         super().__init__()

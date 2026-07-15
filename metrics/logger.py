@@ -1,3 +1,6 @@
+"""In-memory, per-episode training metrics (console summary at end of run)."""
+
+
 class Metrics:
     """
     Tracks per-episode stats across the full training run.
