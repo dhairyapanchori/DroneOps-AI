@@ -7,6 +7,26 @@ Algorithm: Soft Actor-Critic (SAC)
   - Automatic temperature tuning (alpha) — no manual noise schedule
   - No Ornstein-Uhlenbeck noise needed — stochastic actor handles exploration
 
+Architecture — who learns and who doesn't
+  All six drones share ONE actor and ONE critic (parameter sharing).
+  Observations first pass through a fusion pipeline:
+
+      state (N,16) → MetaAdapter (FiLM) → GNN ┐
+                                   └→ Transformer ┴→ concat (N,144)
+
+  The three representation networks are FROZEN at initialisation and act as
+  fixed random feature encoders. Rationale: they are shared between actor and
+  critic, and letting both optimise them couples the two losses and causes
+  circular instability — fixed weights give the critic stationary targets.
+  Only the actor head, critic heads, and temperature alpha receive gradients.
+
+Three complementary selection pressures act on the actor:
+  1. SAC gradient steps (every UPDATE_EVERY env steps) — the main learner.
+  2. Best-actor snapshot: if an episode scores below 70% of the best seen,
+     the best weights are restored with small noise — a cheap collapse guard.
+  3. EvolutionEngine: every EVOLVE_EVERY episodes a (1+λ) ES mutates the
+     actor and keeps the champion — escapes local optima gradients can't.
+
 Curriculum:
   Phase 0 (ep   0–74):  No obstacles, close targets, no failures
   Phase 1 (ep  75–149): 2 obstacles, rare failures
@@ -117,6 +137,9 @@ class Trainer:
         s, a, r, ns, d = self.buf.sample(BATCH)
         B, N = BATCH, NUM_DRONES
 
+        # Un-flatten to (B, N, ·) so the fusion nets can pool across the
+        # swarm dimension, then re-flatten: each drone becomes an
+        # independent SAC sample that shares its swarm's context.
         s_r  = s.view(B, N, STATE_DIM)
         ns_r = ns.view(B, N, STATE_DIM)
 
@@ -126,6 +149,9 @@ class Trainer:
                                ).view(B * N, FUSED_DIM)
 
         # ── Critic update ─────────────────────────────────────────────
+        # Soft Bellman target: r + γ(1-d)·[min(Q1',Q2') - α·logπ(a'|s')]
+        # min over twin critics counters overestimation bias; the -α·logπ
+        # term folds the entropy objective into the value estimate.
         with torch.no_grad():
             next_a, next_logp = self.actor.sample(fused_ns)
             q1_next, q2_next  = self.critic_target(fused_ns, next_a)
@@ -229,7 +255,10 @@ class Trainer:
                 s     = ns
                 ep_r += r.mean()
 
-            # Track and possibly restore best actor
+            # Track and possibly restore best actor.
+            # Restore-with-noise (not plain restore) so the policy resumes
+            # exploring from the good region instead of retracing the exact
+            # trajectory that led to the collapse.
             if ep_r > self.best_ep_reward:
                 self.best_ep_reward   = ep_r
                 self.best_actor_state = copy.deepcopy(self.actor.state_dict())

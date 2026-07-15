@@ -4,10 +4,19 @@ import torch.nn as nn
 
 class MetaAdapter(nn.Module):
     """
-    FiLM-style state normalisation conditioned on swarm context.
+    FiLM-style state modulation conditioned on swarm context.
+
+    The mean state across drones is encoded into per-feature scale and
+    shift parameters applied to every drone's observation. The sigmoid
+    keeps scale in [0.5, 1.5], so the adapter can re-weight features
+    based on the swarm's situation but never zero them out or blow
+    them up — a bounded, stability-friendly transform.
 
     Supports both (N, state_dim) and (B, N, state_dim) input.
     Context is computed as the mean across the N (drone) dimension.
+
+    Frozen at initialisation in this project (fixed feature encoder) —
+    see training/trainer.py for the rationale.
     """
 
     def __init__(self, state_dim, hidden=64):

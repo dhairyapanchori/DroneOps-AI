@@ -1,3 +1,21 @@
+"""
+Single-drone model: point-mass kinematics, energy budget, and local sensing.
+
+Design notes
+------------
+- The drone is a 2D point mass: action[:2] is acceleration, integrated into
+  velocity then position each step. There is no drag or dt constant — the
+  velocity clip (±2) is what bounds top speed.
+- Energy drains in proportion to the *full* action norm each step and never
+  recovers; a drone at zero energy is permanently dead. This is what makes
+  wasteful control costly and enables the "energy crisis" failure mode.
+- Observations are deliberately local and normalised to roughly [-1, 1]:
+  a drone senses only its own kinematics/energy, distances to up to 5
+  neighbours, and the distance + coarse direction (sign only) of the single
+  nearest obstacle and target. The swarm-level picture is provided later by
+  the GNN/Transformer fusion pipeline, not by the raw observation.
+"""
+
 import numpy as np
 
 WORLD_BOUND = 12.0   # hard wall — drones cannot go beyond this

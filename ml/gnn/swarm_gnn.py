@@ -6,9 +6,18 @@ class SwarmGNN(nn.Module):
     """
     Graph Neural Network for swarm communication.
 
+    One round of message passing with mean aggregation over a
+    fully-connected drone graph: each drone's output mixes its own
+    embedding with the swarm average, giving every drone a view of
+    the collective state that its local observation lacks.
+
     Supports both single-episode (N, state_dim) and batched
     (B, N, state_dim) input so the trainer can process a full
     replay-buffer batch in one vectorised forward pass.
+
+    Note: in this project the network is frozen at initialisation and
+    used as a fixed random feature encoder — see training/trainer.py
+    for the rationale.
     """
 
     def __init__(self, state_dim):

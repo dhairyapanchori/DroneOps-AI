@@ -1,3 +1,11 @@
+"""
+Central hyperparameter configuration.
+
+Everything tunable lives here so experiments are a one-file edit.
+FUSED_DIM must stay consistent with the fusion pipeline:
+STATE_DIM (MetaAdapter, passthrough shape) + 64 (GNN) + 64 (Transformer).
+"""
+
 # ── Core dimensions ───────────────────────────────────────────────────
 NUM_DRONES = 6
 STATE_DIM  = 16

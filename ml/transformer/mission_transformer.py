@@ -6,8 +6,17 @@ class MissionTransformer(nn.Module):
     """
     Transformer encoder over the swarm — each drone is a token.
 
+    Self-attention lets every drone attend to every other drone's
+    (adapted) state, complementing the GNN's uniform mean-pooling with
+    content-dependent mixing. No positional encoding on purpose: a
+    swarm is a set, not a sequence, so the encoding must stay
+    permutation-equivariant.
+
     Supports both (N, state_dim) and (B, N, state_dim) input.
     TransformerEncoder with batch_first=True handles the batch dim natively.
+
+    Frozen at initialisation in this project (fixed feature encoder) —
+    see training/trainer.py for the rationale.
     """
 
     def __init__(self, state_dim=16, d_model=64):

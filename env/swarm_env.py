@@ -1,3 +1,34 @@
+"""
+Cooperative swarm environment with curriculum-scaled difficulty.
+
+Reward design (per drone, per step — see `_reward`)
+---------------------------------------------------
+1. Proximity shaping   : sum over targets of 1/(1+dist). Dense signal so
+                         gradient learning works long before any target is
+                         actually reached.
+2. First-touch bonus   : +TARGET_REWARD the first time a given (drone, target)
+                         pair comes within TARGET_RADIUS. One-time, so drones
+                         can't farm the same target repeatedly.
+3. Coordination bonus  : +COORD_BONUS for each target this drone is currently
+                         closest to. This is the term that pushes the swarm to
+                         *split* across targets instead of clustering — being
+                         second-closest earns nothing.
+4. Obstacle penalty    : linear penalty growing toward the obstacle centre.
+                         Obstacles are soft penalty zones, not solid bodies —
+                         drones can fly through, it just hurts.
+5. Energy bonus        : small +energy term so, all else equal, efficient
+                         flight is preferred.
+The total is clipped to [-3, 8] to keep replay rewards (and therefore
+Q-targets) in a stable, bounded range.
+
+Curriculum (see `_curriculum_phase`)
+------------------------------------
+The trainer writes `curriculum_ep` before each reset; the environment maps it
+to a phase that controls obstacle count (0→5), target count (2→3), target
+spread, and drone failure rate (0→FAILURE_PROB). Starting easy lets SAC learn
+basic navigation before coordination and robustness pressures are added.
+"""
+
 import numpy as np
 from core.drone import Drone
 from utils.config import *
