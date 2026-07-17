@@ -41,3 +41,8 @@ MAX_FAILURES  = 1
 EVOLVE_EVERY  = 50
 EVOLVE_POP    = 8
 EVOLVE_SIGMA  = 0.02
+
+# ── Hierarchical mission planner ──────────────────────────────────────
+PLANNER_ZONE_GRID     = 2      # world divided into a 2×2 grid of search zones
+PLANNER_ENGAGE_RADIUS = 3.0    # objective counts as ENGAGED within this range
+PLANNER_RETURN_ENERGY = 0.25   # mean swarm energy that triggers RETURN phase

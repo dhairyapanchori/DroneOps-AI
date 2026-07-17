@@ -14,9 +14,10 @@ class Metrics:
         self.actor_losses    = []
         self.critic_losses   = []
         self.evolution_gains = []   # score improvements from evolution passes
+        self.mission_phases  = []   # final MissionPhase name per episode
 
     def log(self, reward, targets_hit=0, drones_failed=0,
-            coordination=0.0, a_loss=None, c_loss=None):
+            coordination=0.0, a_loss=None, c_loss=None, mission_phase=None):
         self.rewards.append(reward)
         self.targets_hit.append(targets_hit)
         self.drones_failed.append(drones_failed)
@@ -25,6 +26,8 @@ class Metrics:
             self.actor_losses.append(a_loss)
         if c_loss is not None:
             self.critic_losses.append(c_loss)
+        if mission_phase is not None:
+            self.mission_phases.append(mission_phase)
 
     def log_evolution(self, gain):
         self.evolution_gains.append(gain)
@@ -36,6 +39,11 @@ class Metrics:
         def avg(lst):
             return round(sum(lst) / len(lst), 3) if lst else 0.0
 
+        # Distribution of final mission phases, e.g. {"RETURN": 320, ...}
+        phase_counts = {}
+        for p in self.mission_phases:
+            phase_counts[p] = phase_counts.get(p, 0) + 1
+
         return {
             "episodes"          : len(self.rewards),
             "mean_reward"       : avg(self.rewards),
@@ -44,6 +52,7 @@ class Metrics:
             "mean_targets_hit"  : avg(self.targets_hit),
             "mean_failures"     : avg(self.drones_failed),
             "mean_coordination" : avg(self.coordination),
+            "mission_phases"    : phase_counts,
             "evolution_passes"  : len(self.evolution_gains),
             "evolution_gains"   : self.evolution_gains,
         }

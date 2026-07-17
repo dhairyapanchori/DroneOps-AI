@@ -9,7 +9,12 @@ Algorithm: Soft Actor-Critic (SAC)
 
 Architecture — who learns and who doesn't
   All six drones share ONE actor and ONE critic (parameter sharing).
-  Observations first pass through a fusion pipeline:
+  A hierarchical MissionPlanner sits above the control stack: each step it
+  reads swarm telemetry, tracks mission phase (SEARCH/RESCUE/RETURN) and
+  objective status, and issues advisory per-drone directives — the plug-in
+  point for future Dynamic Task Allocation. It is deterministic and does
+  not feed the policy, so training trajectories are unaffected.
+  Observations pass through a fusion pipeline:
 
       state (N,16) → MetaAdapter (FiLM) → GNN ┐
                                    └→ Transformer ┴→ concat (N,144)
@@ -47,6 +52,7 @@ from ml.gnn.swarm_gnn import SwarmGNN
 from ml.transformer.mission_transformer import MissionTransformer
 from ml.meta.meta_adapter import MetaAdapter
 from ml.evolution.evolution_engine import EvolutionEngine
+from ml.planner.mission_planner import MissionPlanner
 from utils.replay_buffer import ReplayBuffer
 from utils.config import *
 from metrics.logger import Metrics
@@ -59,6 +65,9 @@ class Trainer:
 
     def __init__(self):
         self.env = SwarmEnv()
+
+        # Mission-command layer — advisory, sits above the control stack
+        self.planner = MissionPlanner()
 
         # Actor — stochastic Gaussian policy
         self.actor  = SACActorNet(FUSED_DIM, ACTION_DIM)
@@ -226,6 +235,7 @@ class Trainer:
             # Tell environment which episode we're on (for curriculum)
             self.env.curriculum_ep = ep
             s    = self.env.reset()
+            self.planner.begin_mission(self.env)
             ep_r = 0.0
             done = False
 
@@ -240,6 +250,7 @@ class Trainer:
                         a = self.actor.sample(fused)[0].numpy()
 
                 ns, r, done = self.env.step(a)
+                self.planner.update(self.env)
                 done_arr    = np.full(NUM_DRONES, float(done))
                 self.buf.add(s, a, r / REWARD_SCALE, ns, done_arr)  # scale rewards
                 self.total_steps += 1
@@ -273,11 +284,13 @@ class Trainer:
             targets_covered = set(ti for (_, ti) in self.env.targets_reached)
             coordination    = len(targets_covered) / max(1, len(self.env.targets))
             phase           = self.env._curriculum_phase()
+            mission         = self.planner.mission_summary()
 
             self.metrics.log(
                 reward=ep_r, targets_hit=n_targets_hit,
                 drones_failed=n_failed, coordination=coordination,
                 a_loss=last_a_loss, c_loss=last_c_loss,
+                mission_phase=mission["final_phase"],
             )
 
             if last_c_loss is not None:
@@ -291,7 +304,8 @@ class Trainer:
                   f"Tgts={n_targets_hit}  "
                   f"Fail={n_failed}  "
                   f"Coord={coordination:.2f}  "
-                  f"Ph={phase}"
+                  f"Ph={phase}  "
+                  f"M={mission['final_phase']}"
                   f"{loss_str}")
 
             if (ep + 1) % EVOLVE_EVERY == 0:

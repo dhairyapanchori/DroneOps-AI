@@ -18,6 +18,7 @@ from ml.marl.actor import Actor
 from ml.gnn.swarm_gnn import SwarmGNN
 from ml.transformer.mission_transformer import MissionTransformer
 from ml.meta.meta_adapter import MetaAdapter
+from ml.planner.mission_planner import MissionPlanner
 from utils.config import *
 
 
@@ -28,8 +29,9 @@ class SwarmDashboard:
                  trans_path="trans_trained.pth",
                  meta_path="meta_trained.pth"):
 
-        self.env   = SwarmEnv()
-        self.actor = Actor(FUSED_DIM, ACTION_DIM)
+        self.env     = SwarmEnv()
+        self.planner = MissionPlanner()   # mission-command layer (advisory)
+        self.actor   = Actor(FUSED_DIM, ACTION_DIM)
         self.gnn   = SwarmGNN(STATE_DIM)
         self.trans = MissionTransformer(STATE_DIM)
         self.meta  = MetaAdapter(STATE_DIM)
@@ -246,6 +248,9 @@ class SwarmDashboard:
         info = (
             f"Episode    : {self.episode_num}\n"
             f"Step       : {step}/{MAX_STEPS}\n"
+            f"Mission    : {self.planner.state.phase.name}\n"
+            f"Objectives : {self.planner.state.completed_count()}"
+            f"/{len(self.planner.state.objectives)}\n"
             f"────────────────────\n"
             f"Active     : {n_active}/{NUM_DRONES}\n"
             f"Failed     : {n_failed}\n"
@@ -274,6 +279,7 @@ class SwarmDashboard:
             self.episode_num = ep + 1
             self.reward_history = []
             s    = self.env.reset()
+            self.planner.begin_mission(self.env)
             ep_r = 0.0
             done = False
             step = 0
@@ -283,6 +289,7 @@ class SwarmDashboard:
             while not done:
                 actions          = self._get_actions(s)
                 s, rewards, done = self.env.step(actions)
+                self.planner.update(self.env)
                 step_reward      = rewards.mean()
                 ep_r            += step_reward
                 step            += 1
@@ -291,9 +298,12 @@ class SwarmDashboard:
 
             self.episode_rewards.append(ep_r)
             n_failed = len(self.env.failed_ids)
+            mission  = self.planner.mission_summary()
             print(f"[Ep {ep+1:>3}] Reward={ep_r:.1f}  "
                   f"Targets={len(self.env.targets_reached)}  "
-                  f"Failed={n_failed}")
+                  f"Failed={n_failed}  "
+                  f"Mission={mission['final_phase']} "
+                  f"({mission['objectives_completed']}/{mission['objectives_total']} objectives)")
 
         plt.ioff()
         plt.show()

@@ -50,6 +50,7 @@ This project frames all of the above as a shared-policy MARL problem and solves 
 
 | Feature | Description |
 |---|---|
+| 🗺️ **Hierarchical Mission Planner** | Mission-command layer above the control stack: phase management (Search / Rescue / Return / Idle), objective lifecycle tracking, zone-based area assignment, and a pluggable task-allocation interface for future Dynamic Task Allocation |
 | 🧠 **Soft Actor-Critic (SAC)** | Twin critics, entropy-regularised stochastic policy, automatic temperature (α) tuning, tanh-squashed Gaussian actions |
 | 🕸️ **Swarm GNN** | Message-passing layer with mean aggregation gives every drone a view of the collective state |
 | 🔀 **Mission Transformer** | 2-layer Transformer encoder treats each drone as a token for global mission context |
@@ -76,13 +77,22 @@ This project frames all of the above as a shared-policy MARL problem and solves 
                         │          SwarmEnv            │
                         │  6 drones · obstacles ·      │
                         │  targets · energy · failures │
-                        └──────────────┬───────────────┘
-                                       │  per-drone state (6 × 16)
-                                       ▼
-                        ┌──────────────────────────────┐
-                        │     MetaAdapter (FiLM)       │
-                        │  swarm-context scale + shift │
                         └──────┬───────────────┬───────┘
+                               │ telemetry     │  per-drone state (6 × 16)
+                               ▼               │
+              ┌────────────────────────────┐  │
+              │  Hierarchical Mission      │  │
+              │  Planner (mission command) │  │
+              │  phases · objectives ·     │  │
+              │  zones · task allocation   │  │
+              └────────────┬───────────────┘  │
+                           │ advisory directives  │
+                           │ (policy conditioning │
+                           │  arrives with DTA)   ▼
+                           │    ┌──────────────────────────────┐
+                           └╌╌╌►│     MetaAdapter (FiLM)       │
+                                │  swarm-context scale + shift │
+                                └──────┬───────────────┬───────┘
                                │               │
                      ┌─────────▼────┐   ┌──────▼──────────┐
                      │   SwarmGNN   │   │ MissionTrans-   │
@@ -103,6 +113,8 @@ This project frames all of the above as a shared-policy MARL problem and solves 
 ```
 
 **Training loop:** environment rollouts fill a 200k-transition replay buffer → SAC updates run every 4 environment steps (2 gradient steps each) → the critic target network is Polyak-averaged (τ = 0.005) → every 50 episodes the evolution engine evaluates 8 mutated actors and keeps the champion → the best actor snapshot is restored at the end and all networks are checkpointed.
+
+**Mission planning layer:** every step, the Hierarchical Mission Planner reads swarm telemetry and refreshes mission state: objective lifecycle (`PENDING → ENGAGED → COMPLETED`), swarm phase (`SEARCH → RESCUE → RETURN`, with `RETURN` triggered by mission completion *or* low energy reserves), zone-based area assignments during search, and per-drone directives from a pluggable `TaskAllocationStrategy` (greedy nearest-objective baseline today; the interface Dynamic Task Allocation will implement). Directives are **advisory** in this release — they drive mission telemetry, logging, and the dashboard, and deliberately do not perturb the trained SAC policy, so the shipped checkpoints remain valid.
 
 **Curriculum:**
 
@@ -137,6 +149,10 @@ droneops-ai/
 │   │   └── mission_transformer.py  # Drones-as-tokens encoder
 │   ├── meta/
 │   │   └── meta_adapter.py     # FiLM context adapter
+│   ├── planner/
+│   │   ├── mission_planner.py  # Hierarchical mission planner (command layer)
+│   │   ├── mission_state.py    # Phases, objectives, directives, zone grid
+│   │   └── allocation.py       # Task-allocation strategy interface + baseline
 │   └── evolution/
 │       └── evolution_engine.py # (1+λ) evolution strategy
 ├── utils/
@@ -223,7 +239,7 @@ The dashboard renders in real time:
 - ➡️ **Velocity vectors** — per-drone heading and speed
 - 🔋 **Energy bars** — live per-drone energy with colour gradient
 - 📈 **Reward curve** — mean step reward across the episode
-- ℹ️ **Mission panel** — active/failed counts, targets hit, coordination score
+- ℹ️ **Mission panel** — live mission phase (Search / Rescue / Return), objective completion, active/failed counts, targets hit, coordination score
 
 **Demo scenes:** Open Field · Ring Gauntlet · Cross Formation · Hex Grid · Energy Crisis · Binomial Failure · Star Pattern (with interactive T0/T1/T2 focus buttons).
 
@@ -256,6 +272,7 @@ render live episodes (tested on Windows and headless `Agg` backends).
 
 ## 🔮 Future Work
 
+- [ ] **Dynamic Task Allocation** — auction/Hungarian or learned assignment implementing the existing `TaskAllocationStrategy` interface, plus policy conditioning on planner directives
 - [ ] Train the representation networks (GNN / Transformer / MetaAdapter) end-to-end instead of using fixed encoders
 - [ ] Distance-based graph topology in the GNN (currently fully-connected mean aggregation)
 - [ ] Proper time-limit bootstrapping (terminated vs. truncated)
