@@ -1,4 +1,4 @@
-# Drone Swarm Intelligence — runtime dependencies
+# DroneOps AI — runtime dependencies
 # Python >= 3.10 recommended (developed on 3.13)
 
 torch>=2.0

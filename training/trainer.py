@@ -1,5 +1,5 @@
 """
-Swarm Intelligence Trainer — SAC Edition
+DroneOps AI Trainer — SAC Edition
 ─────────────────────────────────────────
 Algorithm: Soft Actor-Critic (SAC)
   - Entropy-regularised objective keeps policy from collapsing

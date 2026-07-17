@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🛰️ Drone Swarm Intelligence
+# 🛰️ DroneOps AI
 
 **Multi-Agent Reinforcement Learning for Autonomous Drone Swarm Coordination**
 
@@ -28,7 +28,7 @@
 
 ## 📖 Overview
 
-**Drone Swarm Intelligence** is a research-grade playground for **cooperative multi-agent reinforcement learning (MARL)**. A swarm of six simulated drones learns — from scratch — to spread across a 2D world, reach mission targets, avoid obstacle zones, manage a limited energy budget, and keep operating when teammates fail mid-mission.
+**DroneOps AI** is a research-grade playground for **cooperative multi-agent reinforcement learning (MARL)**. A swarm of six simulated drones learns — from scratch — to spread across a 2D world, reach mission targets, avoid obstacle zones, manage a limited energy budget, and keep operating when teammates fail mid-mission.
 
 The learning stack combines a modern **Soft Actor-Critic (SAC)** core with a swarm-aware representation pipeline (**FiLM-style context adapter → Graph Neural Network + Transformer encoder**), a **4-phase curriculum** that ramps up difficulty during training, and a periodic **(1 + λ) evolutionary search** that hill-climbs the policy in weight space to escape local optima.
 
@@ -116,7 +116,7 @@ This project frames all of the above as a shared-policy MARL problem and solves 
 ## 📁 Folder Structure
 
 ```
-drone-swarm/
+droneops-ai/
 ├── main.py                     # Training entry point
 ├── run_dashboard.py            # Visualise a trained swarm
 ├── swarm_dashboard_demo.py     # Standalone 7-scene showcase demo
@@ -158,8 +158,8 @@ drone-swarm/
 
 ```bash
 # 1. Clone
-git clone https://github.com/dhairyapanchori/drone-swarm.git
-cd drone-swarm
+git clone https://github.com/dhairyapanchori/droneops-ai.git
+cd droneops-ai
 
 # 2. (Recommended) create a virtual environment
 python -m venv .venv

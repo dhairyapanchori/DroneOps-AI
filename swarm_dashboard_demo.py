@@ -263,7 +263,7 @@ class SwarmDashboardDemo:
     def _build_figure(self):
         self.fig = plt.figure(figsize=(16, 9), facecolor="#0d0d0d")
         self.fig.canvas.manager.set_window_title(
-            "Swarm Intelligence -- Demo Dashboard")
+            "DroneOps AI -- Demo Dashboard")
 
         gs = GridSpec(4, 3, figure=self.fig,
                       left=0.04, right=0.97, top=0.94, bottom=0.10,
@@ -283,7 +283,7 @@ class SwarmDashboardDemo:
                 sp.set_edgecolor("#333333")
 
         plt.suptitle(
-            "[SWARM] Swarm Intelligence -- SAC + GNN + Transformer + Evolution | Demo Mode",
+            "[DRONEOPS] DroneOps AI -- SAC + GNN + Transformer + Evolution | Demo Mode",
             color="#00ff88", fontsize=9, fontweight="bold")
 
         self._setup_main_panel()
