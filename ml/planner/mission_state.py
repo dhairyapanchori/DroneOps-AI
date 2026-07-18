@@ -15,12 +15,25 @@ DroneDirective   : the planner's current high-level order for one drone —
                    policies and Dynamic Task Allocation later.
 ZoneGrid         : partition of the square world into n×n search zones,
                    used to spread drones out during the SEARCH phase.
+CoordinationState: live snapshot of the Task Coordination Engine state —
+                   mission progress, task counts, drone assignments, and
+                   per-phase step counts.  Populated by TaskCoordinationEngine
+                   and stored in MissionState.coordination each step.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
+
+if TYPE_CHECKING:
+    # Imported only for type annotations; avoids circular imports at runtime.
+    # TaskCoordinationEngine → coordination_engine → mission_state is safe
+    # because coordination_engine imports mission_state, not vice-versa.
+    from ml.planner.coordination_engine import CoordinationState
 
 
 class MissionPhase(Enum):
@@ -102,11 +115,21 @@ class MissionState:
     """Complete snapshot of the mission at the current step.
 
     Owned and mutated by MissionPlanner; treat as read-only elsewhere.
+
+    Fields
+    ------
+    phase       : Current swarm-level operating mode.
+    step        : Step counter since begin_mission().
+    objectives  : dict[objective_id, MissionObjective].
+    directives  : dict[drone_id, DroneDirective] — advisory only.
+    coordination: CoordinationState snapshot from TaskCoordinationEngine;
+                  None until the first update() call after begin_mission().
     """
-    phase      : MissionPhase = MissionPhase.IDLE
-    step       : int = 0
-    objectives : dict[int, MissionObjective] = field(default_factory=dict)
-    directives : dict[int, DroneDirective]   = field(default_factory=dict)
+    phase        : MissionPhase = MissionPhase.IDLE
+    step         : int = 0
+    objectives   : dict[int, MissionObjective] = field(default_factory=dict)
+    directives   : dict[int, DroneDirective]   = field(default_factory=dict)
+    coordination : Optional["CoordinationState"] = field(default=None, repr=False)
 
     # ── Convenience queries ───────────────────────────────────────────
 

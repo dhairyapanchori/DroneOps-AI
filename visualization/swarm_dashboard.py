@@ -233,7 +233,7 @@ class SwarmDashboard:
                 bar.set_height(0.02)
                 bar.set_color("#333333")
 
-        # Info panel
+        # Info panel — mission state + coordination summary
         n_active  = int(alive_mask.sum())
         n_failed  = NUM_DRONES - n_active
         n_tgts    = len(self.env.targets_reached)
@@ -245,20 +245,54 @@ class SwarmDashboard:
             for d in self.env.drones if d.alive
         ]) if n_active > 0 else 99.0
 
+        # ── Core mission info ──────────────────────────────────────────
         info = (
             f"Episode    : {self.episode_num}\n"
             f"Step       : {step}/{MAX_STEPS}\n"
-            f"Mission    : {self.planner.state.phase.name}\n"
+            f"Phase      : {self.planner.state.phase.name}\n"
             f"Objectives : {self.planner.state.completed_count()}"
             f"/{len(self.planner.state.objectives)}\n"
-            f"────────────────────\n"
+        )
+
+        # ── Coordination state (Feature 2) ─────────────────────────────
+        cs = self.planner.state.coordination
+        if cs is not None:
+            pct = int(cs.mission_progress * 100)
+            bar_filled = int(cs.mission_progress * 10)
+            bar = "[" + "#" * bar_filled + "-" * (10 - bar_filled) + "]"
+            info += (
+                f"Progress   : {bar} {pct:>3}%\n"
+                f"\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
+                f"TASK SUMMARY\n"
+                f"  Pending  : {cs.task_counts.get('PENDING',     0)}\n"
+                f"  Assigned : {cs.task_counts.get('ASSIGNED',    0)}\n"
+                f"  In Prog  : {cs.task_counts.get('IN_PROGRESS', 0)}\n"
+                f"  Done     : {cs.task_counts.get('COMPLETED',   0)}\n"
+                f"  Failed   : {cs.task_counts.get('FAILED',      0)}\n"
+                f"\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
+                f"DRONE ASSIGNMENTS\n"
+            )
+            for did, tid in sorted(cs.drone_assignments.items()):
+                cap = [d for d in self.env.drones if d.id == did]
+                alive_flag = cap[0].alive if cap else False
+                if not alive_flag:
+                    info += f"  D{did}: [offline]\n"
+                elif tid is not None:
+                    info += f"  D{did}: T{tid}\n"
+                else:
+                    info += f"  D{did}: --\n"
+            info += f"\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
+        else:
+            info += f"\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
+
+        # ── Swarm stats ────────────────────────────────────────────────
+        info += (
             f"Active     : {n_active}/{NUM_DRONES}\n"
             f"Failed     : {n_failed}\n"
             f"Targets Hit: {n_tgts}\n"
-            f"Coordination:{coord:.2f}\n"
-            f"Avg→Target : {avg_to_tgt:.2f}\n"
+            f"Coord Score: {coord:.2f}\n"
+            f"Avg->Target: {avg_to_tgt:.2f}\n"
             f"Step Reward: {step_reward:+.2f}\n"
-            f"────────────────────\n"
         )
         if self.episode_rewards:
             info += f"Best Ep    : {max(self.episode_rewards):.1f}\n"

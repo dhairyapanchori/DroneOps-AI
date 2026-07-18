@@ -46,3 +46,12 @@ EVOLVE_SIGMA  = 0.02
 PLANNER_ZONE_GRID     = 2      # world divided into a 2×2 grid of search zones
 PLANNER_ENGAGE_RADIUS = 3.0    # objective counts as ENGAGED within this range
 PLANNER_RETURN_ENERGY = 0.25   # mean swarm energy that triggers RETURN phase
+
+# ── Task Allocation & Coordination Engine (Feature 2) ─────────────────
+# MultiCriteriaAllocator scoring weights — adjust to bias the allocator.
+# score(task, drone) = w_dist × proximity + w_batt × battery − w_load × workload
+TASK_ALLOC_W_DIST  = 1.0   # proximity weight  (1 / (1 + distance))
+TASK_ALLOC_W_BATT  = 0.5   # battery weight    (favours healthier drones)
+TASK_ALLOC_W_LOAD  = 0.3   # workload penalty  (discourages busy drones)
+# Drone health thresholds
+TASK_LOW_BATTERY   = 0.20  # energy below this → DroneStatus.LOW_BATTERY

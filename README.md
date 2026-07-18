@@ -4,7 +4,7 @@
 
 **Multi-Agent Reinforcement Learning for Autonomous Drone Swarm Coordination**
 
-*Soft Actor-Critic · Graph Neural Networks · Transformers · Evolutionary Search · Curriculum Learning*
+*Soft Actor-Critic · Graph Neural Networks · Transformers · Evolutionary Search · Curriculum Learning · Dynamic Task Allocation*
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
@@ -50,7 +50,8 @@ This project frames all of the above as a shared-policy MARL problem and solves 
 
 | Feature | Description |
 |---|---|
-| 🗺️ **Hierarchical Mission Planner** | Mission-command layer above the control stack: phase management (Search / Rescue / Return / Idle), objective lifecycle tracking, zone-based area assignment, and a pluggable task-allocation interface for future Dynamic Task Allocation |
+| 🗺️ **Hierarchical Mission Planner** | Mission-command layer above the control stack: phase management (Search / Rescue / Return / Idle), objective lifecycle tracking, zone-based area assignment, and a pluggable task-allocation interface |
+| 🧩 **Task Allocation & Coordination Engine** | Full task lifecycle (PENDING → ASSIGNED → IN_PROGRESS → COMPLETED | FAILED), drone availability / battery / workload tracking, deterministic multi-criteria scoring allocator, and a clean Protocol interface for future auction/Hungarian/learned strategies |
 | 🧠 **Soft Actor-Critic (SAC)** | Twin critics, entropy-regularised stochastic policy, automatic temperature (α) tuning, tanh-squashed Gaussian actions |
 | 🕸️ **Swarm GNN** | Message-passing layer with mean aggregation gives every drone a view of the collective state |
 | 🔀 **Mission Transformer** | 2-layer Transformer encoder treats each drone as a token for global mission context |
@@ -59,8 +60,9 @@ This project frames all of the above as a shared-policy MARL problem and solves 
 | 📚 **Curriculum Learning** | 4 phases: from open field → 5 obstacles, 3 targets, random drone failures |
 | 💥 **Failure Simulation** | Binomial pre-flight failures and mid-flight energy deaths; the swarm learns to adapt |
 | 🔋 **Energy Model** | Action-proportional energy drain; drones die at zero energy |
-| 📊 **Live Dashboard** | Real-time swarm map, comm links, velocity vectors, energy bars, reward curves |
-| 🎬 **Demo Mode** | 7 scripted scenes (Ring Gauntlet, Hex Grid, Energy Crisis, …) with interactive target-focus buttons |
+| 📊 **Live Dashboard** | Real-time swarm map, comm links, velocity vectors, energy bars, reward curves, mission progress bar, task status summary, and per-drone assignment panel |
+| 🎨 **Demo Mode** | 7 scripted scenes (Ring Gauntlet, Hex Grid, Energy Crisis, …) with interactive target-focus buttons |
+
 
 ## 🛠️ Technologies
 
@@ -152,16 +154,19 @@ droneops-ai/
 │   ├── planner/
 │   │   ├── mission_planner.py  # Hierarchical mission planner (command layer)
 │   │   ├── mission_state.py    # Phases, objectives, directives, zone grid
-│   │   └── allocation.py       # Task-allocation strategy interface + baseline
+│   │   ├── allocation.py       # Objective-level allocation strategy + baseline
+│   │   ├── task.py             # Task lifecycle: TaskStatus, MissionTask, DroneCapacity
+│   │   ├── allocation_engine.py  # TaskAllocationStrategy Protocol + MultiCriteriaAllocator
+│   │   └── coordination_engine.py  # TaskCoordinationEngine (Feature 2)
 │   └── evolution/
 │       └── evolution_engine.py # (1+λ) evolution strategy
 ├── utils/
-│   ├── config.py               # All hyperparameters
+│   ├── config.py               # All hyperparameters (incl. allocation weights)
 │   └── replay_buffer.py        # Uniform experience replay
 ├── metrics/
 │   └── logger.py               # Per-episode training metrics
 ├── visualization/
-│   └── swarm_dashboard.py      # Live matplotlib dashboard
+│   └── swarm_dashboard.py      # Live matplotlib dashboard (incl. coordination panel)
 ├── docs/
 │   └── assets/                 # Screenshots & media
 │
@@ -239,7 +244,7 @@ The dashboard renders in real time:
 - ➡️ **Velocity vectors** — per-drone heading and speed
 - 🔋 **Energy bars** — live per-drone energy with colour gradient
 - 📈 **Reward curve** — mean step reward across the episode
-- ℹ️ **Mission panel** — live mission phase (Search / Rescue / Return), objective completion, active/failed counts, targets hit, coordination score
+- 📊 **Mission coordination panel** — live mission progress bar, task status summary (PENDING / ASSIGNED / IN_PROGRESS / COMPLETED / FAILED counts), per-drone task assignments
 
 **Demo scenes:** Open Field · Ring Gauntlet · Cross Formation · Hex Grid · Energy Crisis · Binomial Failure · Star Pattern (with interactive T0/T1/T2 focus buttons).
 
@@ -272,7 +277,7 @@ render live episodes (tested on Windows and headless `Agg` backends).
 
 ## 🔮 Future Work
 
-- [ ] **Dynamic Task Allocation** — auction/Hungarian or learned assignment implementing the existing `TaskAllocationStrategy` interface, plus policy conditioning on planner directives
+- [x] **Dynamic Task Allocation** — multi-criteria deterministic `MultiCriteriaAllocator` implementing the `TaskAllocationStrategy` Protocol; full task lifecycle engine (`TaskCoordinationEngine`); battery, workload, and distance-aware assignment; clean extension interface for auction, Hungarian, or learned allocation
 - [ ] Train the representation networks (GNN / Transformer / MetaAdapter) end-to-end instead of using fixed encoders
 - [ ] Distance-based graph topology in the GNN (currently fully-connected mean aggregation)
 - [ ] Proper time-limit bootstrapping (terminated vs. truncated)
