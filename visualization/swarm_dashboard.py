@@ -318,7 +318,7 @@ class SwarmDashboard:
     # ── AI Status setup ───────────────────────────────────────────────────────
 
     def _setup_ai_status(self):
-        """Render the static AI architecture checklist — drawn once."""
+        """Render the static AI architecture pipeline — drawn once."""
         ax = self.ax_ai
         components = [
             ("Mission Planner",    C["accent"]),
@@ -331,22 +331,22 @@ class SwarmDashboard:
             ("Evolution Engine",   C["red"]),
         ]
         y = 0.95
-        ax.text(0.04, y, "COMPONENT", fontsize=6, color=C["text_lo"],
-                transform=ax.transAxes, fontfamily="monospace")
-        ax.text(0.72, y, "STATUS", fontsize=6, color=C["text_lo"],
-                transform=ax.transAxes, fontfamily="monospace")
+        ax.text(0.5, y, "SYSTEM PIPELINE", fontsize=6, color=C["text_lo"],
+                transform=ax.transAxes, fontfamily="monospace", ha="center")
         y -= 0.08
         ax.plot([0.03, 0.97], [y, y], color=C["border"], linewidth=0.5,
                 transform=ax.transAxes, solid_capstyle='butt')
         y -= 0.04
 
-        for name, color in components:
-            ax.text(0.04, y, name, fontsize=6.5, color=C["text_hi"],
-                    transform=ax.transAxes, fontfamily="monospace")
-            ax.text(0.73, y, "[ONLINE]", fontsize=6.5, color=color,
-                    transform=ax.transAxes, fontfamily="monospace",
+        lh = 0.096
+        for i, (name, color) in enumerate(components):
+            ax.text(0.5, y, name, fontsize=6.5, color=color,
+                    transform=ax.transAxes, fontfamily="monospace", ha="center",
                     fontweight="bold")
-            y -= 0.10
+            if i < len(components) - 1:
+                ax.text(0.5, y - 0.048, "\u2193", fontsize=7, color=C["text_lo"],
+                        transform=ax.transAxes, fontfamily="monospace", ha="center")
+            y -= lh
 
     # ── Fusion pipeline (unchanged from original) ─────────────────────────────
 
@@ -481,6 +481,10 @@ class SwarmDashboard:
 
     # ── Event log ─────────────────────────────────────────────────────────────
 
+    def _format_time(self, step: int) -> str:
+        """Format step as MM:SS (assuming 1 step = 1 second for demo timeline)."""
+        return f"{step // 60:02d}:{step % 60:02d}"
+
     def _append_log(self, msg: str):
         """Append a line to the mission log (max 14 lines)."""
         self.log_lines.append(msg)
@@ -490,17 +494,18 @@ class SwarmDashboard:
     def _detect_events(self, step: int):
         """Compare current vs previous state; emit events on changes."""
         phase = self.planner.state.phase.name
+        ts = self._format_time(step)
 
         # Phase change
         if phase != self._prev_phase:
-            self._append_log(f"[{step:>3}] Phase: {phase}")
+            self._append_log(f"{ts} Phase: {phase}")
             self._prev_phase = phase
 
         # Drone losses
         current_alive = {d.id for d in self.env.drones if d.alive}
         lost = self._prev_alive - current_alive
         for did in sorted(lost):
-            self._append_log(f"[{step:>3}] Drone {did} offline")
+            self._append_log(f"{ts} Drone {did} offline")
         self._prev_alive = current_alive
 
         # Task assignments
@@ -509,14 +514,14 @@ class SwarmDashboard:
             for did, tid in cs.drone_assignments.items():
                 prev_tid = self._prev_assignments.get(did)
                 if tid is not None and tid != prev_tid:
-                    self._append_log(f"[{step:>3}] D{did} -> Task {tid}")
+                    self._append_log(f"{ts} D{did} -> Task {tid}")
             self._prev_assignments = dict(cs.drone_assignments)
 
         # Objective completions
         completed_now = {ti for (_, ti) in self.env.targets_reached}
         new_done = completed_now - self._prev_completed
         for ti in sorted(new_done):
-            self._append_log(f"[{step:>3}] Objective {ti} DONE")
+            self._append_log(f"{ts} Objective {ti} DONE")
         self._prev_completed = completed_now
 
     # ── Panel renderers ───────────────────────────────────────────────────────
@@ -606,12 +611,13 @@ class SwarmDashboard:
         self._style_axes(ax, "  DRONE FLEET")
 
         cs = self.planner.state.coordination
+        phase = self.planner.state.phase.name
 
         # Header
         y = 0.93
         lh = 0.115
-        cols = [0.04, 0.15, 0.36, 0.56, 0.75, 0.91]
-        headers = ["ID", "STATUS", "TASK", "BATT", "POS-X", "POS-Y"]
+        cols = [0.04, 0.15, 0.35, 0.52, 0.72]
+        headers = ["ID", "STATUS", "TASK", "BATT", "AI REASONING"]
         for hx, ht in zip(cols, headers):
             ax.text(hx, y, ht, fontsize=5.5, color=C["text_lo"],
                     transform=ax.transAxes, fontfamily="monospace")
@@ -625,23 +631,39 @@ class SwarmDashboard:
             alv  = drone.alive
             batt = drone.energy
             pos  = drone.pos
+            
+            reason = "Standby"
 
             if not alv:
                 status_txt = "OFFLINE"
                 status_col = C["text_lo"]
                 row_col    = C["text_lo"]
+                reason     = "Power loss"
             elif batt < 0.20:
                 status_txt = "LOW BATT"
                 status_col = C["red"]
                 row_col    = C["text_hi"]
+                reason     = "Preserving energy"
             elif cs and cs.drone_assignments.get(did) is not None:
                 status_txt = "ON TASK"
                 status_col = C["blue"]
                 row_col    = C["text_hi"]
+                tid = cs.drone_assignments.get(did)
+                if tid is not None and tid < len(self.env.targets):
+                    tgt = self.env.targets[tid]
+                    dist = float(np.linalg.norm(pos - tgt))
+                    reason = f"Closest (dist: {dist:.1f}m)"
+                else:
+                    reason = "Assigned priority task"
             else:
                 status_txt = "READY"
                 status_col = C["accent"]
                 row_col    = C["text_hi"]
+                if phase == "SEARCH":
+                    zone_id = self.planner.state.directives.get(did).zone_id if did in self.planner.state.directives else "?"
+                    reason = f"Patrolling Zone {zone_id}"
+                elif phase == "RETURN":
+                    reason = "Returning to base"
 
             task_txt = "—"
             if cs:
@@ -656,8 +678,7 @@ class SwarmDashboard:
                 (status_txt,      status_col),
                 (task_txt,        C["blue"] if task_txt != "—" else C["text_lo"]),
                 (batt_txt,        batt_col),
-                (f"{pos[0]:+.1f}", row_col),
-                (f"{pos[1]:+.1f}", row_col),
+                (reason,          row_col),
             ]
             for vx, (vt, vc) in zip(cols, vals):
                 ax.text(vx, y, vt, fontsize=6, color=vc,
@@ -798,7 +819,7 @@ class SwarmDashboard:
 
             s    = self.env.reset()
             self.planner.begin_mission(self.env)
-            self._append_log(f"[  0] Mission {ep + 1} started")
+            self._append_log(f"00:00 Mission {ep + 1} started")
             ep_r = 0.0
             done = False
             step = 0
@@ -819,7 +840,7 @@ class SwarmDashboard:
             n_failed = len(self.env.failed_ids)
             mission  = self.planner.mission_summary()
             self._append_log(
-                f"[{step:>3}] Ep {ep+1} done  R={ep_r:.1f}"
+                f"{self._format_time(step)} Ep {ep+1} done"
             )
             print(
                 f"[Ep {ep+1:>3}]  Reward={ep_r:.1f}  "
