@@ -60,7 +60,7 @@ This project frames all of the above as a shared-policy MARL problem and solves 
 | 📚 **Curriculum Learning** | 4 phases: from open field → 5 obstacles, 3 targets, random drone failures |
 | 💥 **Failure Simulation** | Binomial pre-flight failures and mid-flight energy deaths; the swarm learns to adapt |
 | 🔋 **Energy Model** | Action-proportional energy drain; drones die at zero energy |
-| 📊 **Live Dashboard** | Real-time swarm map, comm links, velocity vectors, energy bars, reward curves, mission progress bar, task status summary, and per-drone assignment panel |
+| 📊 **Mission Control Center** | Enterprise-grade 3-column dashboard featuring live swarm map, task coordination, drone fleet status, real-time mission log, AI system architecture status, and training metrics |
 | 🎨 **Demo Mode** | 7 scripted scenes (Ring Gauntlet, Hex Grid, Energy Crisis, …) with interactive target-focus buttons |
 
 
@@ -166,7 +166,7 @@ droneops-ai/
 ├── metrics/
 │   └── logger.py               # Per-episode training metrics
 ├── visualization/
-│   └── swarm_dashboard.py      # Live matplotlib dashboard (incl. coordination panel)
+│   └── swarm_dashboard.py      # Mission Control Center dashboard
 ├── docs/
 │   └── assets/                 # Screenshots & media
 │
@@ -235,9 +235,9 @@ Loops through 7 curated scenes forever — perfect for presentations. Pretrained
 6. **Evolution** — every 50 episodes, 8 mutated actors are rolled out; the champion replaces the current actor if it scores higher.
 7. **Checkpointing** — the best actor is restored and all five networks are saved.
 
-## 📊 Dashboard
+## 📊 Mission Control Center
 
-The dashboard renders in real time:
+The Mission Control Center renders the complete system architecture in real time:
 
 - 🗺️ **Swarm map** — energy-coloured drones, failed drones (grey ✗), obstacle penalty zones, targets (⭐ turn gold when reached)
 - 🔗 **Communication links** — proximity-based link rendering between drones

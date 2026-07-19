@@ -40,8 +40,7 @@ from ml.planner.mission_state import (DroneDirective, MissionObjective,
                                       MissionPhase, MissionState,
                                       ObjectiveStatus, ZoneGrid)
 from utils.config import (PLANNER_ENGAGE_RADIUS, PLANNER_RETURN_ENERGY,
-                          PLANNER_ZONE_GRID,
-                          TASK_ALLOC_W_BATT, TASK_ALLOC_W_DIST, TASK_ALLOC_W_LOAD)
+                          PLANNER_ZONE_GRID)
 
 
 class MissionPlanner:
