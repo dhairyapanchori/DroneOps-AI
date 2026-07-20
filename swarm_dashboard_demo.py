@@ -389,6 +389,17 @@ class SwarmDashboardDemo:
             s_t   = torch.FloatTensor(s)
             fused = self._fuse(s_t)
             if hasattr(self.actor, "deterministic"):
+                actions = self.actor.deterministic(fused)
+                # Fallback to stochastic sampling if the policy mean has collapsed
+                # to near-zero (untrained or poorly-converged checkpoint).
+                if actions.abs().mean() < 0.05:
+                    actions = self.actor.sample(fused)[0]
+                return actions.numpy()
+            return self.actor(fused).numpy()
+        with torch.no_grad():
+            s_t   = torch.FloatTensor(s)
+            fused = self._fuse(s_t)
+            if hasattr(self.actor, "deterministic"):
                 return self.actor.deterministic(fused).numpy()
             return self.actor(fused).numpy()
 
@@ -764,6 +775,8 @@ class SwarmDashboardDemo:
             info += f"Last Ep   : {self.episode_rewards[-1]:.1f}\n"
 
         self.info_text.set_text(info)
+        self.fig.canvas.draw_idle()
+        self.fig.canvas.flush_events()
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
 
@@ -771,6 +784,7 @@ class SwarmDashboardDemo:
 
     def run(self, pause=0.04):
         plt.ion()
+        plt.show(block=False)
         plt.show()
 
         while True:                              # loop forever

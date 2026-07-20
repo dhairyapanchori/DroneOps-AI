@@ -362,7 +362,12 @@ class SwarmDashboard:
             s_t   = torch.FloatTensor(s)
             fused = self._fuse(s_t)
             if hasattr(self.actor, "deterministic"):
-                return self.actor.deterministic(fused).numpy()
+                actions = self.actor.deterministic(fused)
+                # Fallback to stochastic sampling if the policy mean has collapsed
+                # to near-zero (untrained or poorly-converged checkpoint).
+                if actions.abs().mean() < 0.05:
+                    actions = self.actor.sample(fused)[0]
+                return actions.numpy()
             return self.actor(fused).numpy()
 
     # ── Map drawing helpers ───────────────────────────────────────────────────
@@ -797,7 +802,7 @@ class SwarmDashboard:
         self._render_drone_fleet()
         self._render_mission_log()
 
-        self.fig.canvas.draw()
+        self.fig.canvas.draw_idle()
         self.fig.canvas.flush_events()
 
     # ── Episode run ───────────────────────────────────────────────────────────
@@ -806,7 +811,7 @@ class SwarmDashboard:
         """Run `num_episodes` evaluation episodes with live rendering."""
         self.env.curriculum_ep = 225   # full Phase-3 difficulty for evaluation
         plt.ion()
-        plt.show()
+        plt.show(block=False)
 
         for ep in range(num_episodes):
             self.episode_num    = ep + 1
