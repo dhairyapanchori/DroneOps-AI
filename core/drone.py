@@ -48,7 +48,7 @@ class Drone:
             return
 
         # Update velocity and position
-        self.vel = np.clip(self.vel + action[:2] * 0.1, -2.0, 2.0)
+        self.vel = np.clip(self.vel + action[:2] * 0.2, -3.0, 3.0)
         self.pos = self.pos + self.vel
 
         # ── Hard boundary walls — bounce and clamp ─────────────────
