@@ -110,6 +110,15 @@ class Trainer:
         self.best_ep_reward = -float('inf')
         self.best_actor_state = None
 
+        # Expose state for dashboard
+        self.current_ep = 0
+        self.is_training = False
+        self.log_events = []
+        self.last_c_loss = 0.0
+        self.last_a_loss = 0.0
+        self.last_alpha = 0.2
+        self.last_alpha_loss = 0.0
+
     @property
     def alpha(self):
         # Clamp so alpha never drops below alpha_min
@@ -137,11 +146,11 @@ class Trainer:
     def _update(self):
         """One SAC gradient step: critic → actor → temperature → target sync.
 
-        Returns (critic_loss, actor_loss, alpha) or (None, None, None)
+        Returns (critic_loss, actor_loss, alpha, alpha_loss) or (None, None, None, None)
         while the replay buffer is still warming up.
         """
         if len(self.buf) < WARMUP_STEPS:
-            return None, None, None
+            return None, None, None, None
 
         s, a, r, ns, d = self.buf.sample(BATCH)
         B, N = BATCH, NUM_DRONES
@@ -204,7 +213,7 @@ class Trainer:
         # Soft-update critic target only (representation nets are frozen, targets = online)
         self._soft_update(self.critic, self.critic_target)
 
-        return c_loss.item() / 2, a_loss.item(), self.alpha.item()
+        return c_loss.item() / 2, a_loss.item(), self.alpha.item(), alpha_loss.item()
 
     # ── Evolution fitness rollout ─────────────────────────────────────
 
@@ -229,9 +238,10 @@ class Trainer:
 
     def train(self):
         """Full training run: curriculum episodes → SAC updates → evolution → save."""
-        last_c_loss = last_a_loss = last_alpha = None
+        self.is_training = True
 
         for ep in tqdm(range(MAX_EPISODES)):
+            self.current_ep = ep + 1
             # Tell environment which episode we're on (for curriculum)
             self.env.curriculum_ep = ep
             s    = self.env.reset()
@@ -257,11 +267,12 @@ class Trainer:
 
                 if self.total_steps % UPDATE_EVERY == 0:
                     for _ in range(UPDATES_PER_STEP):
-                        c, al, alpha = self._update()
+                        c, al, alpha, al_loss = self._update()
                         if c is not None:
-                            last_c_loss  = c
-                            last_a_loss  = al
-                            last_alpha   = alpha
+                            self.last_c_loss  = c
+                            self.last_a_loss  = al
+                            self.last_alpha   = alpha
+                            self.last_alpha_loss = al_loss
 
                 s     = ns
                 ep_r += r.mean()
@@ -289,16 +300,28 @@ class Trainer:
             self.metrics.log(
                 reward=ep_r, targets_hit=n_targets_hit,
                 drones_failed=n_failed, coordination=coordination,
-                a_loss=last_a_loss, c_loss=last_c_loss,
+                a_loss=self.last_a_loss if self.last_c_loss else None, 
+                c_loss=self.last_c_loss if self.last_c_loss else None,
                 mission_phase=mission["final_phase"],
             )
 
-            if last_c_loss is not None:
+            if self.last_c_loss is not None:
                 # ASCII-only console output — Windows terminals often use
                 # cp1252, which cannot encode Greek letters or emoji.
-                loss_str = f"  C={last_c_loss:.3f} A={last_a_loss:.3f} alpha={last_alpha:.3f}"
+                loss_str = f"  C={self.last_c_loss:.3f} A={self.last_a_loss:.3f} alpha={self.last_alpha:.3f}"
             else:
                 loss_str = "  [warmup]"
+
+            log_str = (f"Episode {ep+1} | Reward {ep_r:+.1f} | Mission {mission['final_phase']} | "
+                       f"Targets {n_targets_hit} | Failures {n_failed} | "
+                       f"Coord {coordination:.2f} | ")
+            if self.last_c_loss is not None:
+                log_str += f"Critic: {self.last_c_loss:.4f} | Actor: {self.last_a_loss:.3f} | Alpha: {self.last_alpha:.3f}"
+            else:
+                log_str += "Warmup"
+            self.log_events.append(log_str)
+            if len(self.log_events) > 100:
+                self.log_events.pop(0)
 
             print(f"Ep {ep+1:>3}  R={ep_r:+7.1f}  "
                   f"Tgts={n_targets_hit}  "
@@ -334,3 +357,5 @@ class Trainer:
         torch.save(self.trans.state_dict(),  "trans_trained.pth")
         torch.save(self.meta.state_dict(),   "meta_trained.pth")
         print("Saved: actor / critic / gnn / trans / meta")
+        self.log_events.append("Checkpoints Saved")
+        self.is_training = False
