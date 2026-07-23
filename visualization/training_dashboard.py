@@ -16,12 +16,13 @@ import time
 import datetime
 import threading
 import numpy as np
+from collections import deque
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QGridLayout, QLabel, QFrame, QScrollArea,
     QTableWidget, QTableWidgetItem, QHeaderView, QTextEdit,
-    QPushButton, QProgressBar
+    QPushButton, QProgressBar, QComboBox
 )
 from PySide6.QtCore import Qt, QTimer, QRectF
 from PySide6.QtGui import QFont, QColor, QPainter, QPen
@@ -159,12 +160,17 @@ class TrainingDashboard:
         self.h_success_rate      = []
         self.h_buffer            = []
 
+        # Configurable history limit: Retain the last 100 episodes in memory
+        # so early episodes (like Episode 1) can be replayed without using excessive RAM.
+        self.REPLAY_HISTORY_LIMIT = 100
+        
         # ── Telemetry Hooks for Episode Replay ────────────────────────
         self._live_telemetry = []
-        self._prev_telemetry = []
+        self._replay_history = deque(maxlen=self.REPLAY_HISTORY_LIMIT)
         self._telemetry_lock = threading.Lock()
         self._playback_frame = 0
-        self._replay_mode = "Live"  # "Live" or "Previous"
+        self._replay_mode = "Live"  # "Live" or "History"
+        self._selected_history_idx = -1
         self._hook_env()
 
         self._active_tab = "Reward"
@@ -266,7 +272,9 @@ class TrainingDashboard:
                         "t_reached": t_reached,
                         "t_total": t_total
                     })
-                    self._prev_telemetry = self._live_telemetry
+                    self._replay_history.append(self._live_telemetry)
+                    print(f"[DEBUG] Recording Episode {ep_idx}")
+                    print(f"[DEBUG] Replay History Size = {len(self._replay_history)}")
                 self._live_telemetry = []
                 # Capture initial state
                 self._capture_frame(env)
@@ -416,26 +424,34 @@ class TrainingDashboard:
         self._tog_live = QPushButton("Live Episode")
         self._tog_live.setProperty("role", "toggle")
         self._tog_live.setProperty("active", True)
-        self._tog_prev = QPushButton("Previous Episode")
-        self._tog_prev.setProperty("role", "toggle")
         
-        def _set_mode(m):
+        self._history_combo = QComboBox()
+        self._history_combo.addItem("Select Past Episode...")
+        self._history_combo.setStyleSheet(f"background: {PANEL}; color: {TEXT}; border: 1px solid {BORDER}; padding: 4px;")
+        
+        def _set_mode(m, history_idx=-1):
             self._replay_mode = m
             self._playback_frame = 0
             self._current_buf = None
+            self._selected_history_idx = history_idx
             if hasattr(self, "_overlay_text"):
                 self._overlay_text.hide()
                 self._overlay_frames_left = 0
             self._tog_live.setProperty("active", m == "Live")
-            self._tog_prev.setProperty("active", m == "Previous")
             self._tog_live.style().unpolish(self._tog_live); self._tog_live.style().polish(self._tog_live)
-            self._tog_prev.style().unpolish(self._tog_prev); self._tog_prev.style().polish(self._tog_prev)
+            if m == "Live":
+                self._history_combo.setCurrentIndex(0)
             
         self._tog_live.clicked.connect(lambda: _set_mode("Live"))
-        self._tog_prev.clicked.connect(lambda: _set_mode("Previous"))
+        
+        def _on_combo_change(idx):
+            if idx > 0:
+                _set_mode("History", idx - 1)
+                
+        self._history_combo.currentIndexChanged.connect(_on_combo_change)
         
         top.addWidget(self._tog_live)
-        top.addWidget(self._tog_prev)
+        top.addWidget(self._history_combo)
         top.addStretch()
         self._frame_lbl = _label("Frame: 0", 10, TEXT3)
         top.addWidget(self._frame_lbl)
@@ -626,7 +642,14 @@ class TrainingDashboard:
 
         with self._telemetry_lock:
             if getattr(self, "_current_buf", None) is None:
-                self._current_buf = self._live_telemetry if self._replay_mode == "Live" else self._prev_telemetry
+                if self._replay_mode == "Live":
+                    self._current_buf = self._live_telemetry
+                else:
+                    idx = getattr(self, "_selected_history_idx", -1)
+                    if 0 <= idx < len(self._replay_history):
+                        self._current_buf = self._replay_history[idx]
+                    else:
+                        self._current_buf = []
                 self._playback_frame = 0
 
             buf = self._current_buf
@@ -728,6 +751,18 @@ class TrainingDashboard:
             
             coord = metrics.coordination[-1] if hasattr(metrics, "coordination") and metrics.coordination else 0
             self.h_coordination.append(coord * 100) # scale to 100 for plot
+            
+        # Update replay history combo
+        with self._telemetry_lock:
+            n_hist = len(self._replay_history)
+            
+        if self._history_combo.count() - 1 < n_hist:
+            current_count = self._history_combo.count() - 1
+            for i in range(current_count, n_hist):
+                # Safely get the episode number from the summary frame, which is the last element
+                ep_data = self._replay_history[i][-1]
+                ep_num = ep_data.get("ep", "?")
+                self._history_combo.addItem(f"Episode {ep_num}")
             
             recent = self.h_rewards[-20:]
             succ_rate = sum(1 for r in recent if r > 10) / max(1, len(recent)) * 100
