@@ -322,15 +322,7 @@ class Trainer:
             self.log_events.append(log_str)
             if len(self.log_events) > 100:
                 self.log_events.pop(0)
-
-            print(f"Ep {ep+1:>3}  R={ep_r:+7.1f}  "
-                  f"Tgts={n_targets_hit}  "
-                  f"Fail={n_failed}  "
-                  f"Coord={coordination:.2f}  "
-                  f"Ph={phase}  "
-                  f"M={mission['final_phase']}"
-                  f"{loss_str}")
-
+            print(log_str)
             if (ep + 1) % EVOLVE_EVERY == 0:
                 print(f"\n  [Evolution] Running {EVOLVE_POP} mutants...")
                 best_actor, best_score, improved = self.evo.evolve(self._fitness)

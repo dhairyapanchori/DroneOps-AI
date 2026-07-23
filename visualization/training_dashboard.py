@@ -11,7 +11,6 @@ Features:
 """
 
 import sys
-import os
 import time
 import datetime
 import threading
@@ -273,8 +272,6 @@ class TrainingDashboard:
                         "t_total": t_total
                     })
                     self._replay_history.append(self._live_telemetry)
-                    print(f"[DEBUG] Recording Episode {ep_idx}")
-                    print(f"[DEBUG] Replay History Size = {len(self._replay_history)}")
                 self._live_telemetry = []
                 # Capture initial state
                 self._capture_frame(env)
@@ -397,7 +394,7 @@ class TrainingDashboard:
         self._chart = pg.PlotWidget()
         self._chart.setBackground(PANEL)
         self._chart.showGrid(x=True, y=True, alpha=0.15)
-        self._chart.setLabel("bottom", "Episode", color=TEXT3, **{"font-size": "9px"})
+        self._chart.setLabel("bottom", "Episode", color=TEXT3, **{"font-size": "9pt"})
         self._chart.getAxis("bottom").setPen(pg.mkPen(BORDER))
         self._chart.getAxis("left").setPen(pg.mkPen(BORDER))
         self._chart.getAxis("bottom").setTextPen(pg.mkPen(TEXT3))
@@ -632,8 +629,6 @@ class TrainingDashboard:
         if self._overlay_frames_left > 0:
             self._overlay_frames_left -= 1
             if self._overlay_frames_left == 0:
-                print("[DEBUG] Overlay finished")
-                print("[DEBUG] Loading next replay")
                 self._overlay_text.hide()
                 # Force switch to latest buffer on resume
                 self._current_buf = None
@@ -662,9 +657,6 @@ class TrainingDashboard:
                 # We are at the end of the available buffer
                 frame = buf[self._playback_frame]
                 if frame.get("is_summary"):
-                    print("[DEBUG] Replay finished")
-                    print("[DEBUG] Displaying overlay")
-                    print("[DEBUG] Overlay timer started")
                     self._show_summary_overlay(frame)
                     self._overlay_frames_left = int(2000 / 60) # ~2 seconds
                     return
