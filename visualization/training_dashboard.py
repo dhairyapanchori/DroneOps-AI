@@ -249,7 +249,7 @@ class TrainingDashboard:
 
     def _capture_frame(self, env):
         frame = {
-            "drones": [(d.pos.copy(), d.alive) for d in env.drones],
+            "drones": [(d.pos.copy(), d.vel.copy(), d.alive) for d in env.drones],
             "targets": env.targets.copy(),
             "obstacles": env.obstacles.copy(),
             "reached": set(env.targets_reached)
@@ -574,23 +574,50 @@ class TrainingDashboard:
             # Drones
             d_pos = []
             d_brush = []
-            for i, (pos, alive) in enumerate(frame["drones"]):
+            d_sym = []
+            for i, (pos, vel, alive) in enumerate(frame["drones"]):
                 d_pos.append(pos)
                 col = DRONE_COLORS[i] if alive else "#475569" # dim if dead
                 d_brush.append(pg.mkBrush(col))
                 
+                # Create oriented drone shape
+                from PySide6.QtGui import QPainterPath, QTransform
+                import math
+                path = QPainterPath()
+                # Nose points to +x
+                path.moveTo(8, 0)
+                path.lineTo(-6, 6)
+                path.lineTo(-2, 0)
+                path.lineTo(-6, -6)
+                path.closeSubpath()
+                
+                # Calculate angle (0 if stationary)
+                angle = math.degrees(math.atan2(vel[1], vel[0])) if (vel[0] != 0 or vel[1] != 0) else 90
+                trans = QTransform()
+                # Screen Y is flipped relative to math Y in pyqtgraph ScatterPlotItem
+                trans.rotate(-angle)
+                d_sym.append(trans.map(path))
+                
             if d_pos:
                 self._map_drones.setData(
                     pos=np.array(d_pos), brush=d_brush,
-                    pen=pg.mkPen(BORDER, width=2), size=14, symbol="o"
+                    pen=pg.mkPen(BORDER, width=1.5), size=16, symbol=d_sym
                 )
                 
             # Env features
             tgts = frame.get("targets", [])
             reached = frame.get("reached", set())
             if len(tgts) > 0:
-                t_brush = [pg.mkBrush(YELLOW if i in reached else GREEN) for i in range(len(tgts))]
-                self._map_targets.setData(pos=np.array(tgts), brush=t_brush, size=16, symbol="star")
+                t_brush = []
+                t_pen = []
+                for i in range(len(tgts)):
+                    if i in reached:
+                        t_brush.append(pg.mkBrush(GREEN))
+                        t_pen.append(pg.mkPen(GREEN))
+                    else:
+                        t_brush.append(pg.mkBrush(None))  # Hollow
+                        t_pen.append(pg.mkPen(YELLOW, width=2))
+                self._map_targets.setData(pos=np.array(tgts), brush=t_brush, pen=t_pen, size=18, symbol="o")
             
             obs = frame.get("obstacles", [])
             if len(obs) > 0:
