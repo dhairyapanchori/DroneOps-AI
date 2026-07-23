@@ -124,10 +124,10 @@ class TrainingDashboard:
         ax.axis("off")
         
         ep = self.trainer.current_ep
-        max_ep = cfg.MAX_EPISODES
+        max_ep = getattr(cfg, 'MAX_EPISODES', 100)
         prog = ep / max(1, max_ep)
         steps = self.trainer.total_steps
-        max_steps = max_ep * cfg.MAX_STEPS # rough max
+        max_steps = max_ep * getattr(cfg, 'MAX_STEPS', 100) # rough max
         
         elapsed = time.time() - self.start_time
         eta = (elapsed / max(1, ep)) * (max_ep - ep) if ep > 0 else 0
@@ -289,7 +289,7 @@ class TrainingDashboard:
         self._style_axes(ax, "REPLAY BUFFER")
         
         buf_size = len(self.trainer.buf)
-        cap = cfg.BUFFER_SIZE
+        cap = getattr(cfg, 'BUFFER_SIZE', 100000)
         pct = buf_size / cap
         
         ax.text(0.4, 0.75, "Size", color=C["text_lo"], fontsize=7)
@@ -359,15 +359,29 @@ class TrainingDashboard:
         ax.axis("off")
         self._style_axes(ax, "HYPERPARAMETERS")
         
-        params = [
-            ("Learning Rate (Actor)", f"{cfg.LR_ACTOR}"),
-            ("Learning Rate (Critic)", f"{cfg.LR_CRITIC}"),
-            ("Alpha (Entropy Coef.)", f"{self.trainer.last_alpha:.3g}"),
-            ("Discount Factor (γ)", f"{cfg.GAMMA}"),
-            ("Batch Size", f"{cfg.BATCH}"),
-            ("Update Every", f"{cfg.UPDATE_EVERY} Steps"),
-            ("Updates Per Step", f"{cfg.UPDATES_PER_STEP}"),
-        ]
+        import sys
+        trainer_mod = sys.modules.get('training.trainer')
+
+        params = []
+        if hasattr(cfg, 'LR_ACTOR'):
+            params.append(("Learning Rate (Actor)", f"{cfg.LR_ACTOR}"))
+        if hasattr(cfg, 'LR_CRITIC'):
+            params.append(("Learning Rate (Critic)", f"{cfg.LR_CRITIC}"))
+            
+        params.append(("Alpha (Entropy Coef.)", f"{self.trainer.last_alpha:.3g}"))
+        
+        if hasattr(cfg, 'GAMMA'):
+            params.append(("Discount Factor (γ)", f"{cfg.GAMMA}"))
+        if hasattr(cfg, 'BATCH'):
+            params.append(("Batch Size", f"{cfg.BATCH}"))
+            
+        update_every = getattr(cfg, 'UPDATE_EVERY', getattr(trainer_mod, 'UPDATE_EVERY', None))
+        if update_every is not None:
+            params.append(("Update Every", f"{update_every} Steps"))
+            
+        updates_per_step = getattr(cfg, 'UPDATES_PER_STEP', getattr(trainer_mod, 'UPDATES_PER_STEP', None))
+        if updates_per_step is not None:
+            params.append(("Updates Per Step", f"{updates_per_step}"))
         
         y = 0.8
         for k, v in params:
