@@ -50,9 +50,9 @@ from utils.config import NUM_DRONES, MAX_STEPS, FUSED_DIM, ACTION_DIM, STATE_DIM
 # === Typography ===
 FS_KPI_LBL = 8
 FS_KPI_VAL = 14
-FS_HDR     = 9
-FS_TBL     = 8
-FS_LOG     = 7.5
+FS_HDR     = 9.5
+FS_TBL     = 9.5
+FS_LOG     = 9.5
 
 # === Color palette ===
 
@@ -598,13 +598,13 @@ class SwarmDashboard:
         cs = self.planner.state.coordination
 
         # Header
-        y = 0.82
+        y = 0.85
         lh = 0.16
         cols = [0.05, 0.22, 0.48, 0.75]
         headers = ["ID", "STATUS", "TASK", "BATT"]
         for hx, ht in zip(cols, headers):
             ax.text(hx, y, ht, fontsize=FS_TBL, color=C["text_lo"],
-                    transform=ax.transAxes, fontfamily="monospace", fontweight="bold")
+                    transform=ax.transAxes, fontfamily="monospace", fontweight="bold", va="center")
         y -= 0.05
         ax.plot([0.02, 0.98], [y, y], color=C["border"], linewidth=0.5,
                 transform=ax.transAxes, solid_capstyle='butt')
@@ -635,18 +635,20 @@ class SwarmDashboard:
                 task_txt   = "Standby"
 
             ax.text(cols[0], y, f"D{did}", fontsize=FS_TBL, color=C["text_hi"],
-                    transform=ax.transAxes, fontfamily="monospace")
+                    transform=ax.transAxes, fontfamily="monospace", va="center")
             ax.text(cols[1], y, status_txt, fontsize=FS_TBL, color=status_col,
-                    transform=ax.transAxes, fontfamily="monospace")
+                    transform=ax.transAxes, fontfamily="monospace", va="center")
             ax.text(cols[2], y, task_txt, fontsize=FS_TBL, color=C["text_hi"],
-                    transform=ax.transAxes, fontfamily="monospace")
+                    transform=ax.transAxes, fontfamily="monospace", va="center")
             
             # Draw tiny battery bar
             bx = cols[3]
             bw = 0.20
-            bh = 0.04
-            ax.add_patch(matplotlib.patches.Rectangle((bx, y), bw, bh, transform=ax.transAxes, facecolor=C["border"]))
-            ax.add_patch(matplotlib.patches.Rectangle((bx, y), bw * batt, bh, transform=ax.transAxes, facecolor=_energy_color(batt)))
+            bh = 0.06
+            # shift y by bh/2 so the rectangle is centered vertically with the text
+            by = y - (bh / 2)
+            ax.add_patch(matplotlib.patches.Rectangle((bx, by), bw, bh, transform=ax.transAxes, facecolor=C["border"]))
+            ax.add_patch(matplotlib.patches.Rectangle((bx, by), bw * batt, bh, transform=ax.transAxes, facecolor=_energy_color(batt)))
             
             y -= lh
 
@@ -658,14 +660,14 @@ class SwarmDashboard:
         self._style_axes(ax, "  LIVE MISSION LOG")
 
         if not self.log_lines:
-            ax.text(0.05, 0.5, "Awaiting events...",
+            ax.text(0.08, 0.5, "Awaiting events...",
                     fontsize=FS_LOG, color=C["text_lo"],
-                    transform=ax.transAxes, fontfamily="monospace")
+                    transform=ax.transAxes, fontfamily="monospace", va="center")
             return
 
-        y = 0.82
-        lh = 0.10
-        for line in reversed(self.log_lines[-9:]):
+        y = 0.85
+        lh = 0.12
+        for line in reversed(self.log_lines[-7:]):
             # Color-code keywords
             if "offline" in line.lower() or "FAIL" in line:
                 col = C["red"]
@@ -684,10 +686,10 @@ class SwarmDashboard:
             else:
                 time_str, msg = "", line
                 
-            ax.text(0.06, y, time_str, fontsize=FS_LOG, color=C["text_lo"],
-                    transform=ax.transAxes, fontfamily="monospace")
-            ax.text(0.22, y, msg, fontsize=FS_LOG, color=col,
-                    transform=ax.transAxes, fontfamily="monospace")
+            ax.text(0.08, y, time_str, fontsize=FS_LOG, color=C["text_lo"],
+                    transform=ax.transAxes, fontfamily="monospace", va="center")
+            ax.text(0.24, y, msg, fontsize=FS_LOG, color=col,
+                    transform=ax.transAxes, fontfamily="monospace", va="center")
             y -= lh
 
     # === Main frame update ===
