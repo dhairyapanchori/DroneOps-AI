@@ -252,7 +252,7 @@ class TrainingDashboard:
             "drones": [(d.pos.copy(), d.vel.copy(), d.alive) for d in env.drones],
             "targets": env.targets.copy(),
             "obstacles": env.obstacles.copy(),
-            "reached": set(env.targets_reached)
+            "reached": {tid for (_, tid) in env.targets_reached}
         }
         self._live_telemetry.append(frame)
 
@@ -419,7 +419,6 @@ class TrainingDashboard:
             curve = self._map.plot(pen=c)
             self._trails.append(curve)
 
-        self._map_drones = pg.ScatterPlotItem(size=14, pen=pg.mkPen(None))
         self._map_targets = pg.ScatterPlotItem(size=16, pen=pg.mkPen(None), symbol="star")
         self._map_obstacles = pg.ScatterPlotItem(size=12, pen=pg.mkPen(None), symbol="x")
         self._map_base = pg.ScatterPlotItem(size=18, pen=pg.mkPen(None), symbol="t")
@@ -427,7 +426,13 @@ class TrainingDashboard:
         self._map.addItem(self._map_targets)
         self._map.addItem(self._map_obstacles)
         self._map.addItem(self._map_base)
-        self._map.addItem(self._map_drones)
+        
+        self._drone_arrows = []
+        for i in range(6):
+            arrow = pg.ArrowItem(angle=0, headLen=16, headWidth=12, tailLen=0, brush=DRONE_COLORS[i])
+            self._map.addItem(arrow)
+            self._drone_arrows.append(arrow)
+            
         lay.addWidget(self._map)
         return f
 
@@ -572,37 +577,23 @@ class TrainingDashboard:
                     t.setData([], [])
                     
             # Drones
-            d_pos = []
-            d_brush = []
-            d_sym = []
+            import math
             for i, (pos, vel, alive) in enumerate(frame["drones"]):
-                d_pos.append(pos)
-                col = DRONE_COLORS[i] if alive else "#475569" # dim if dead
-                d_brush.append(pg.mkBrush(col))
-                
-                # Create oriented drone shape
-                from PySide6.QtGui import QPainterPath, QTransform
-                import math
-                path = QPainterPath()
-                # Nose points to +x
-                path.moveTo(8, 0)
-                path.lineTo(-6, 6)
-                path.lineTo(-2, 0)
-                path.lineTo(-6, -6)
-                path.closeSubpath()
-                
-                # Calculate angle (0 if stationary)
-                angle = math.degrees(math.atan2(vel[1], vel[0])) if (vel[0] != 0 or vel[1] != 0) else 90
-                trans = QTransform()
-                # Screen Y is flipped relative to math Y in pyqtgraph ScatterPlotItem
-                trans.rotate(-angle)
-                d_sym.append(trans.map(path))
-                
-            if d_pos:
-                self._map_drones.setData(
-                    pos=np.array(d_pos), brush=d_brush,
-                    pen=pg.mkPen(BORDER, width=1.5), size=16, symbol=d_sym
-                )
+                if i < len(self._drone_arrows):
+                    arrow = self._drone_arrows[i]
+                    arrow.setPos(pos[0], pos[1])
+                    if alive:
+                        angle = math.degrees(math.atan2(vel[1], vel[0])) if (vel[0] != 0 or vel[1] != 0) else 90
+                        # Pyqtgraph ArrowItem angle 0 points left (-x). 
+                        # We want it to point in the direction of velocity.
+                        # Actually ArrowItem angle=0 points left, angle=180 points right.
+                        # Wait, let's verify ArrowItem rotation.
+                        # Standard math: 0 is right (+x). If we subtract 180, 0 becomes left (-x).
+                        # Let's set it to 180 - angle.
+                        arrow.setStyle(angle=180 - angle, brush=DRONE_COLORS[i])
+                        arrow.show()
+                    else:
+                        arrow.hide()
                 
             # Env features
             tgts = frame.get("targets", [])
