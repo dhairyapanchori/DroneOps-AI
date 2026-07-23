@@ -663,9 +663,9 @@ class SwarmDashboard:
                     transform=ax.transAxes, fontfamily="monospace")
             return
 
-        y = 0.85
-        lh = 0.08
-        for line in reversed(self.log_lines[-11:]):
+        y = 0.82
+        lh = 0.10
+        for line in reversed(self.log_lines[-9:]):
             # Color-code keywords
             if "offline" in line.lower() or "FAIL" in line:
                 col = C["red"]
@@ -677,7 +677,16 @@ class SwarmDashboard:
                 col = C["blue"]
             else:
                 col = C["text_lo"]
-            ax.text(0.05, y, line, fontsize=FS_LOG, color=col,
+
+            parts = line.split(" ", 1)
+            if len(parts) == 2:
+                time_str, msg = parts
+            else:
+                time_str, msg = "", line
+                
+            ax.text(0.06, y, time_str, fontsize=FS_LOG, color=C["text_lo"],
+                    transform=ax.transAxes, fontfamily="monospace")
+            ax.text(0.22, y, msg, fontsize=FS_LOG, color=col,
                     transform=ax.transAxes, fontfamily="monospace")
             y -= lh
 
