@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from matplotlib.patches import Rectangle, Circle
+from matplotlib.patches import Rectangle, Circle, FancyBboxPatch
 
 import utils.config as cfg
 from training.trainer import Trainer
@@ -163,7 +163,7 @@ class TrainingDashboard:
         # Status
         status = "Running" if self.trainer.is_training else "Finished"
         color = C["accent"] if self.trainer.is_training else C["text_lo"]
-        ax.add_patch(Rectangle((0.92, 0.1), 0.07, 0.7, color=C["bg"], ec=C["border"], lw=1, rx=0.1, ry=0.1))
+        ax.add_patch(FancyBboxPatch((0.92, 0.1), 0.07, 0.7, boxstyle="round,pad=0.02", color=C["bg"], ec=C["border"], lw=1))
         ax.text(0.93, 0.55, "Training Status", color=C["text_lo"], fontsize=6)
         ax.add_patch(Circle((0.935, 0.25), 0.05, color=color, transform=ax.transData))
         ax.text(0.945, 0.25, status, color=color, fontsize=7)
