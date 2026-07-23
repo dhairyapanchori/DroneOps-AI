@@ -47,6 +47,13 @@ from ml.planner.task import DroneStatus
 from utils.config import NUM_DRONES, MAX_STEPS, FUSED_DIM, ACTION_DIM, STATE_DIM
 
 
+# === Typography ===
+FS_KPI_LBL = 8
+FS_KPI_VAL = 14
+FS_HDR     = 9
+FS_TBL     = 8
+FS_LOG     = 7.5
+
 # === Color palette ===
 
 C = {
@@ -149,13 +156,13 @@ class SwarmDashboard:
         gs = gridspec.GridSpec(
             6, 6,
             figure=self.fig,
-            left=0.03, right=0.98,
+            left=0.03, right=0.97,
             top=0.92, bottom=0.04,
-            wspace=0.35, hspace=0.45,
+            wspace=0.4, hspace=0.5,
         )
 
         # Top Bar (Rows 0, Cols 0-5): 5 discrete cards
-        top_gs = gs[0, 0:6].subgridspec(1, 5, wspace=0.15)
+        top_gs = gs[0, 0:6].subgridspec(1, 5, wspace=0.3)
         self.ax_top = [self.fig.add_subplot(top_gs[0, i]) for i in range(5)]
 
         # Middle Left: Map (Rows 1-4, Cols 0-3)
@@ -193,15 +200,14 @@ class SwarmDashboard:
             ax.set_title(
                 title,
                 color=title_color or C["accent"],
-                fontsize=7.5, fontweight="bold",
-                pad=4,
+                fontsize=FS_HDR, fontweight="bold",
+                pad=8, loc="left"
             )
 
     def _style_all_axes(self):
-        # Top cards (text only)
+        # Top cards
         for ax in self.ax_top:
             self._style_axes(ax, "")
-            ax.axis("off")
 
         # Main map
         self._style_axes(self.ax_map, "")
@@ -216,9 +222,10 @@ class SwarmDashboard:
         ]:
             self._style_axes(ax, title)
 
-        # Text-only panels
-        for ax in [self.ax_mission, self.ax_fleet, self.ax_tasks, self.ax_log]:
-            ax.axis("off")
+        # Text-only panels (hide ticks but keep borders for consistent cards)
+        for ax in self.ax_top + [self.ax_mission, self.ax_fleet, self.ax_tasks, self.ax_log]:
+            ax.set_xticks([])
+            ax.set_yticks([])
 
     # === Map setup ===
 
@@ -230,7 +237,7 @@ class SwarmDashboard:
         ax.set_aspect("equal")
         ax.set_title(
             "  LIVE SWARM MAP", color=C["accent"],
-            fontsize=8, fontweight="bold", pad=5, loc="left",
+            fontsize=FS_HDR, fontweight="bold", pad=8, loc="left",
         )
         ax.grid(True, color=C["border"], linewidth=0.4, alpha=0.6)
         ax.axhline(0, color=C["border"], lw=0.6)
@@ -274,7 +281,7 @@ class SwarmDashboard:
         ]
         ax.legend(
             handles=legend_elems, loc="upper right",
-            fontsize=5.5, facecolor=C["panel"],
+            fontsize=FS_TBL, facecolor=C["panel"],
             edgecolor=C["border"], labelcolor=C["text_lo"],
             framealpha=0.9,
         )
@@ -514,52 +521,53 @@ class SwarmDashboard:
 
         for ax, (title, value, color) in zip(self.ax_top, cards):
             ax.clear()
-            ax.axis("off")
-            ax.set_facecolor(C["panel"])
+            ax.set_xticks([])
+            ax.set_yticks([])
+            self._style_axes(ax, "")
             
             # Title
-            ax.text(0.1, 0.65, title, fontsize=6.5, color=C["text_lo"],
+            ax.text(0.1, 0.60, title, fontsize=FS_KPI_LBL, color=C["text_lo"],
                     transform=ax.transAxes, fontfamily="monospace", fontweight="bold")
             # Value
-            ax.text(0.1, 0.25, value, fontsize=11, color=color,
+            ax.text(0.1, 0.20, value, fontsize=FS_KPI_VAL, color=color,
                     transform=ax.transAxes, fontfamily="monospace", fontweight="bold")
 
     def _render_mission_summary(self):
         ax = self.ax_mission
         ax.clear()
-        ax.axis("off")
-        ax.set_facecolor(C["panel"])
+        ax.set_xticks([])
+        ax.set_yticks([])
         self._style_axes(ax, "  MISSION SUMMARY")
         
         ms = self.planner.state
         cs = ms.coordination
         progress = cs.mission_progress if cs else 0.0
         pct = int(progress * 100)
-        bar_len = 16
+        bar_len = 14
         filled = int(progress * bar_len)
         bar = "[" + "#" * filled + "-" * (bar_len - filled) + "]"
 
         y = 0.75
-        lh = 0.18
-        ax.text(0.05, y, f"Progress: {bar} {pct}%", fontsize=7.5, color=C["accent"],
+        lh = 0.20
+        ax.text(0.05, y, f"Progress: {bar} {pct}%", fontsize=FS_TBL, color=C["accent"],
                 transform=ax.transAxes, fontfamily="monospace")
         y -= lh
-        ax.text(0.05, y, f"Targets Reached: {ms.completed_count()} / {len(ms.objectives)}", fontsize=7, color=C["text_hi"],
+        ax.text(0.05, y, f"Targets Reached: {ms.completed_count()} / {len(ms.objectives)}", fontsize=FS_TBL, color=C["text_hi"],
                 transform=ax.transAxes, fontfamily="monospace")
         y -= lh
         
         if cs:
-            ax.text(0.05, y, f"Active Coordination: True", fontsize=7, color=C["text_lo"],
+            ax.text(0.05, y, f"Active Coordination: True", fontsize=FS_TBL, color=C["text_lo"],
                     transform=ax.transAxes, fontfamily="monospace")
             y -= lh
-            ax.text(0.05, y, f"Total Tasks: {sum(cs.task_counts.values())}", fontsize=7, color=C["text_lo"],
+            ax.text(0.05, y, f"Total Tasks: {sum(cs.task_counts.values())}", fontsize=FS_TBL, color=C["text_lo"],
                     transform=ax.transAxes, fontfamily="monospace")
 
     def _render_task_coordination(self):
         ax = self.ax_tasks
         ax.clear()
-        ax.axis("off")
-        ax.set_facecolor(C["panel"])
+        ax.set_xticks([])
+        ax.set_yticks([])
         self._style_axes(ax, "  TASK STATUS")
 
         cs = self.planner.state.coordination
@@ -572,49 +580,49 @@ class SwarmDashboard:
         ]
 
         y  = 0.82
-        lh = 0.17
+        lh = 0.18
 
         for key, col in statuses:
             count = cs.task_counts.get(key, 0) if cs else 0
-            ax.text(0.08, y, f"{key:11s} : {count}", fontsize=7, color=col,
+            ax.text(0.08, y, f"{key:11s} : {count}", fontsize=FS_TBL, color=col,
                     transform=ax.transAxes, fontfamily="monospace")
             y -= lh
 
     def _render_drone_fleet(self):
         ax = self.ax_fleet
         ax.clear()
-        ax.axis("off")
-        ax.set_facecolor(C["panel"])
+        ax.set_xticks([])
+        ax.set_yticks([])
         self._style_axes(ax, "  DRONE FLEET")
 
         cs = self.planner.state.coordination
 
         # Header
-        y = 0.85
+        y = 0.82
         lh = 0.16
-        cols = [0.04, 0.20, 0.45, 0.70]
+        cols = [0.05, 0.22, 0.48, 0.75]
         headers = ["ID", "STATUS", "TASK", "BATT"]
         for hx, ht in zip(cols, headers):
-            ax.text(hx, y, ht, fontsize=6.5, color=C["text_lo"],
+            ax.text(hx, y, ht, fontsize=FS_TBL, color=C["text_lo"],
                     transform=ax.transAxes, fontfamily="monospace", fontweight="bold")
         y -= 0.05
         ax.plot([0.02, 0.98], [y, y], color=C["border"], linewidth=0.5,
                 transform=ax.transAxes, solid_capstyle='butt')
+        
         y -= 0.10
 
         for drone in self.env.drones:
             did  = drone.id
             alv  = drone.alive
             batt = drone.energy
-            pos  = drone.pos
             
             if not alv:
                 status_txt = "OFFLINE"
-                status_col = C["text_lo"]
+                status_col = C["red"]
                 task_txt   = "-"
             elif batt < 0.20:
                 status_txt = "LOW BATT"
-                status_col = C["red"]
+                status_col = C["yellow"]
                 task_txt   = "Returning"
             elif cs and cs.drone_assignments.get(did) is not None:
                 status_txt = "ON TASK"
@@ -626,11 +634,11 @@ class SwarmDashboard:
                 status_col = C["text_hi"]
                 task_txt   = "Standby"
 
-            ax.text(cols[0], y, f"D{did}", fontsize=6.5, color=C["text_hi"],
+            ax.text(cols[0], y, f"D{did}", fontsize=FS_TBL, color=C["text_hi"],
                     transform=ax.transAxes, fontfamily="monospace")
-            ax.text(cols[1], y, status_txt, fontsize=6.5, color=status_col,
+            ax.text(cols[1], y, status_txt, fontsize=FS_TBL, color=status_col,
                     transform=ax.transAxes, fontfamily="monospace")
-            ax.text(cols[2], y, task_txt, fontsize=6.5, color=C["text_hi"],
+            ax.text(cols[2], y, task_txt, fontsize=FS_TBL, color=C["text_hi"],
                     transform=ax.transAxes, fontfamily="monospace")
             
             # Draw tiny battery bar
@@ -645,17 +653,17 @@ class SwarmDashboard:
     def _render_mission_log(self):
         ax = self.ax_log
         ax.clear()
-        ax.axis("off")
-        ax.set_facecolor(C["panel"])
+        ax.set_xticks([])
+        ax.set_yticks([])
         self._style_axes(ax, "  LIVE MISSION LOG")
 
         if not self.log_lines:
             ax.text(0.05, 0.5, "Awaiting events...",
-                    fontsize=6, color=C["text_lo"],
+                    fontsize=FS_LOG, color=C["text_lo"],
                     transform=ax.transAxes, fontfamily="monospace")
             return
 
-        y  = 0.92
+        y = 0.85
         lh = 0.08
         for line in reversed(self.log_lines[-11:]):
             # Color-code keywords
@@ -669,7 +677,7 @@ class SwarmDashboard:
                 col = C["blue"]
             else:
                 col = C["text_lo"]
-            ax.text(0.03, y, line, fontsize=6.5, color=col,
+            ax.text(0.05, y, line, fontsize=FS_LOG, color=col,
                     transform=ax.transAxes, fontfamily="monospace")
             y -= lh
 
