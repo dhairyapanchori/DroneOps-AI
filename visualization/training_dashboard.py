@@ -208,10 +208,10 @@ class TrainingDashboard:
         ml.addWidget(bot_w, 3)
 
         # ── Timers ────────────────────────────────────────────────────
-        # Fast timer for smooth map playback/rendering (30 fps)
+        # Fast timer for smooth map playback/rendering (15-20 fps)
         self._anim_timer = QTimer()
         self._anim_timer.timeout.connect(self._render_map_frame)
-        self._anim_timer.start(33)
+        self._anim_timer.start(60)  # ~16 FPS
 
         # Slow timer for heavy chart/metric updates (2 fps)
         self._poll_timer = QTimer()
@@ -544,10 +544,13 @@ class TrainingDashboard:
             if not buf:
                 return
                 
-            # If Live, always show the latest frame to reduce latency
-            # If Previous, play back linearly
+            # In both modes, advance smoothly so movement is easy to follow.
+            # If Live, we play back the current buffer up to its latest frame.
+            if self._playback_frame >= len(buf):
+                self._playback_frame = 0
+            
             if self._replay_mode == "Live":
-                self._playback_frame = len(buf) - 1
+                self._playback_frame = min(self._playback_frame + 1, len(buf) - 1)
             else:
                 self._playback_frame = (self._playback_frame + 1) % len(buf)
                 
