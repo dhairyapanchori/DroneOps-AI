@@ -230,8 +230,42 @@ class TrainingDashboard:
 
         def hooked_reset(*args, **kwargs):
             ret = orig_reset(*args, **kwargs)
+            now = time.time()
             with self._telemetry_lock:
                 if self._live_telemetry:
+                    # Finalize episode summary
+                    ep_idx = getattr(self.trainer, "current_ep", 0) - 1
+                    metrics = getattr(self.trainer, "metrics", None)
+                    ep_reward = metrics.rewards[-1] if (metrics and hasattr(metrics, "rewards") and len(metrics.rewards) > 0) else 0
+                    
+                    last_frame = self._live_telemetry[-1]
+                    t_reached = len(last_frame["reached"])
+                    t_total = len(last_frame["targets"])
+                    all_dead = all(not alive for _, _, alive in last_frame["drones"])
+                    
+                    if t_reached == t_total and t_total > 0:
+                        reason = "Mission Completed Successfully"
+                        success = True
+                    elif all_dead:
+                        reason = "All Drones Failed"
+                        success = False
+                    else:
+                        reason = "Mission Timed Out (Maximum Steps Reached)"
+                        success = False
+                        
+                    start_t = self._live_telemetry[0].get("wall_time", now)
+                    
+                    self._live_telemetry.append({
+                        "is_summary": True,
+                        "ep": ep_idx,
+                        "reward": ep_reward,
+                        "steps": len(self._live_telemetry),
+                        "duration": now - start_t,
+                        "reason": reason,
+                        "success": success,
+                        "t_reached": t_reached,
+                        "t_total": t_total
+                    })
                     self._prev_telemetry = self._live_telemetry
                 self._live_telemetry = []
                 # Capture initial state
@@ -249,6 +283,8 @@ class TrainingDashboard:
 
     def _capture_frame(self, env):
         frame = {
+            "is_summary": False,
+            "wall_time": time.time(),
             "drones": [(d.pos.copy(), d.vel.copy(), d.alive) for d in env.drones],
             "targets": env.targets.copy(),
             "obstacles": env.obstacles.copy(),
@@ -386,6 +422,9 @@ class TrainingDashboard:
         def _set_mode(m):
             self._replay_mode = m
             self._playback_frame = 0
+            if hasattr(self, "_overlay_text"):
+                self._overlay_text.hide()
+                self._overlay_frames_left = 0
             self._tog_live.setProperty("active", m == "Live")
             self._tog_prev.setProperty("active", m == "Previous")
             self._tog_live.style().unpolish(self._tog_live); self._tog_live.style().polish(self._tog_live)
@@ -433,6 +472,12 @@ class TrainingDashboard:
             self._map.addItem(arrow)
             self._drone_arrows.append(arrow)
             
+        self._overlay_text = pg.TextItem(html="", anchor=(0.5, 0.5), fill=pg.mkBrush(17, 24, 39, 230), border=pg.mkPen(BORDER))
+        self._overlay_text.setPos(0, 0)
+        self._overlay_text.setZValue(100)
+        self._overlay_text.hide()
+        self._map.addItem(self._overlay_text)
+        
         lay.addWidget(self._map)
         return f
 
@@ -542,8 +587,38 @@ class TrainingDashboard:
             self._lines["alpha"].setVisible(True)
             self._chart.setLabel("left", "Alpha")
 
+    def _show_summary_overlay(self, frame):
+        res_col = GREEN if frame['success'] else RED
+        res_text = "SUCCESS" if frame['success'] else "FAILURE"
+        html = f"""
+        <div style="text-align: center; padding: 4px;">
+            <div style="color: {TEXT3}; font-size: 11px; margin-bottom: 2px; font-weight: bold;">EPISODE {frame['ep']}</div>
+            <div style="color: {res_col}; margin-top: 0; font-size: 16px; font-weight: bold; margin-bottom: 8px;">{frame['reason']}</div>
+            <table style="color: {TEXT}; font-size: 12px; margin: 0 auto;" cellspacing="4">
+                <tr><td align="right" style="color:{TEXT3};">Result:</td><td align="left"><b style="color:{res_col};">{res_text}</b></td></tr>
+                <tr><td align="right" style="color:{TEXT3};">Targets Reached:</td><td align="left"><b>{frame['t_reached']} / {frame['t_total']}</b></td></tr>
+                <tr><td align="right" style="color:{TEXT3};">Reward:</td><td align="left"><b>{frame['reward']:.2f}</b></td></tr>
+                <tr><td align="right" style="color:{TEXT3};">Total Steps:</td><td align="left"><b>{frame['steps']}</b></td></tr>
+                <tr><td align="right" style="color:{TEXT3};">Duration:</td><td align="left"><b>{frame['duration']:.1f}s</b></td></tr>
+            </table>
+        </div>
+        """
+        self._overlay_text.setHtml(html)
+        self._overlay_text.show()
+
     def _render_map_frame(self):
-        """High-frequency playback of episode trajectory (30fps)."""
+        """High-frequency playback of episode trajectory."""
+        if not hasattr(self, "_overlay_frames_left"):
+            self._overlay_frames_left = 0
+
+        if self._overlay_frames_left > 0:
+            self._overlay_frames_left -= 1
+            if self._overlay_frames_left == 0:
+                self._overlay_text.hide()
+                # Resume/loop after overlay finishes
+                self._playback_frame = 0
+            return
+
         with self._telemetry_lock:
             buf = self._live_telemetry if self._replay_mode == "Live" else self._prev_telemetry
             if not buf:
@@ -561,6 +636,11 @@ class TrainingDashboard:
                 
             frame = buf[self._playback_frame]
             self._frame_lbl.setText(f"Frame: {self._playback_frame}/{len(buf)-1}")
+            
+            if frame.get("is_summary"):
+                self._show_summary_overlay(frame)
+                self._overlay_frames_left = int(2000 / 60) # ~2 seconds
+                return
             
             # Trails
             if len(buf) > 1:
