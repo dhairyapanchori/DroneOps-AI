@@ -102,26 +102,26 @@ class SwarmDashboard:
         meta_path  : str = "meta_trained.pth",
     ):
         # 1. Models & Env
-        self.env     = SwarmEnv(num_drones=NUM_DRONES, gui=False)
+        self.env     = SwarmEnv()
         self.planner = MissionPlanner()
 
         def load_ckpt(path):
             p = os.path.join(os.path.dirname(__file__), "..", "checkpoints", path)
             return torch.load(p, map_location="cpu", weights_only=True) if os.path.exists(p) else None
 
-        self.actor = Actor(state_dim=FUSED_DIM, action_dim=ACTION_DIM)
+        self.actor = Actor(FUSED_DIM, ACTION_DIM)
         if ckpt := load_ckpt(actor_path): self.actor.load_state_dict(ckpt)
         self.actor.eval()
 
-        self.gnn = SwarmGNN(node_dim=64, hidden_dim=64)
+        self.gnn = SwarmGNN(STATE_DIM)
         if ckpt := load_ckpt(gnn_path): self.gnn.load_state_dict(ckpt)
         self.gnn.eval()
 
-        self.trans = MissionTransformer(input_dim=64, embed_dim=64)
+        self.trans = MissionTransformer(STATE_DIM)
         if ckpt := load_ckpt(trans_path): self.trans.load_state_dict(ckpt)
         self.trans.eval()
 
-        self.meta = MetaAdapter(state_dim=STATE_DIM, hidden_dim=64)
+        self.meta = MetaAdapter(STATE_DIM)
         if ckpt := load_ckpt(meta_path): self.meta.load_state_dict(ckpt)
         self.meta.eval()
 
