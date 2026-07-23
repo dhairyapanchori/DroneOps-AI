@@ -422,6 +422,7 @@ class TrainingDashboard:
         def _set_mode(m):
             self._replay_mode = m
             self._playback_frame = 0
+            self._current_buf = None
             if hasattr(self, "_overlay_text"):
                 self._overlay_text.hide()
                 self._overlay_frames_left = 0
@@ -474,7 +475,7 @@ class TrainingDashboard:
             
         self._overlay_text = pg.TextItem(html="", anchor=(0.5, 0.5), fill=pg.mkBrush(17, 24, 39, 230), border=pg.mkPen(BORDER))
         self._overlay_text.setPos(0, 0)
-        self._overlay_text.setZValue(100)
+        self._overlay_text.setZValue(1000)
         self._overlay_text.hide()
         self._map.addItem(self._overlay_text)
         
@@ -591,10 +592,10 @@ class TrainingDashboard:
         res_col = GREEN if frame['success'] else RED
         res_text = "SUCCESS" if frame['success'] else "FAILURE"
         html = f"""
-        <div style="text-align: center; padding: 4px;">
-            <div style="color: {TEXT3}; font-size: 11px; margin-bottom: 2px; font-weight: bold;">EPISODE {frame['ep']}</div>
-            <div style="color: {res_col}; margin-top: 0; font-size: 16px; font-weight: bold; margin-bottom: 8px;">{frame['reason']}</div>
-            <table style="color: {TEXT}; font-size: 12px; margin: 0 auto;" cellspacing="4">
+        <div align="center">
+            <span style="color: {TEXT3}; font-size: 11px;"><b>EPISODE {frame['ep']}</b></span><br/>
+            <span style="color: {res_col}; font-size: 18px;"><b>{frame['reason']}</b></span><br/><br/>
+            <table style="color: {TEXT}; font-size: 12px;" align="center" cellspacing="4">
                 <tr><td align="right" style="color:{TEXT3};">Result:</td><td align="left"><b style="color:{res_col};">{res_text}</b></td></tr>
                 <tr><td align="right" style="color:{TEXT3};">Targets Reached:</td><td align="left"><b>{frame['t_reached']} / {frame['t_total']}</b></td></tr>
                 <tr><td align="right" style="color:{TEXT3};">Reward:</td><td align="left"><b>{frame['reward']:.2f}</b></td></tr>
@@ -603,8 +604,9 @@ class TrainingDashboard:
             </table>
         </div>
         """
-        self._overlay_text.setHtml(html)
         self._overlay_text.show()
+        self._overlay_text.setHtml(html)
+        self._map.update()
 
     def _render_map_frame(self):
         """High-frequency playback of episode trajectory."""
@@ -614,33 +616,43 @@ class TrainingDashboard:
         if self._overlay_frames_left > 0:
             self._overlay_frames_left -= 1
             if self._overlay_frames_left == 0:
+                print("[DEBUG] Overlay finished")
+                print("[DEBUG] Loading next replay")
                 self._overlay_text.hide()
-                # Resume/loop after overlay finishes
+                # Force switch to latest buffer on resume
+                self._current_buf = None
                 self._playback_frame = 0
             return
 
         with self._telemetry_lock:
-            buf = self._live_telemetry if self._replay_mode == "Live" else self._prev_telemetry
+            if getattr(self, "_current_buf", None) is None:
+                self._current_buf = self._live_telemetry if self._replay_mode == "Live" else self._prev_telemetry
+                self._playback_frame = 0
+
+            buf = self._current_buf
             if not buf:
                 return
-                
-            # In both modes, advance smoothly so movement is easy to follow.
-            # If Live, we play back the current buffer up to its latest frame.
-            if self._playback_frame >= len(buf):
-                self._playback_frame = 0
-            
-            if self._replay_mode == "Live":
-                self._playback_frame = min(self._playback_frame + 1, len(buf) - 1)
+
+            if self._playback_frame < len(buf) - 1:
+                self._playback_frame += 1
             else:
-                self._playback_frame = (self._playback_frame + 1) % len(buf)
+                # We are at the end of the available buffer
+                frame = buf[self._playback_frame]
+                if frame.get("is_summary"):
+                    print("[DEBUG] Replay finished")
+                    print("[DEBUG] Displaying overlay")
+                    print("[DEBUG] Overlay timer started")
+                    self._show_summary_overlay(frame)
+                    self._overlay_frames_left = int(2000 / 60) # ~2 seconds
+                    return
+                # If it's not a summary, we are just waiting for the live buffer to grow
                 
             frame = buf[self._playback_frame]
-            self._frame_lbl.setText(f"Frame: {self._playback_frame}/{len(buf)-1}")
-            
             if frame.get("is_summary"):
-                self._show_summary_overlay(frame)
-                self._overlay_frames_left = int(2000 / 60) # ~2 seconds
+                # Shouldn't normally hit this due to logic above, but just in case
                 return
+
+            self._frame_lbl.setText(f"Frame: {self._playback_frame}/{len(buf)-1}")
             
             # Trails
             if len(buf) > 1:
