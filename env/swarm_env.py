@@ -69,6 +69,13 @@ class SwarmEnv:
         Phase 3 (ep 225+):    Full difficulty — 5 obstacles, 3 targets
         """
         ep = self.curriculum_ep
+        import utils.config as cfg
+        if getattr(cfg, "DEMO_FAST_CURRICULUM", False):
+            if ep < 10: return 0
+            if ep < 20: return 1
+            if ep < 30: return 2
+            return 3
+            
         if ep < 75:   return 0
         if ep < 150:  return 1
         if ep < 225:  return 2

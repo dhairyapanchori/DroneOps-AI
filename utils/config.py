@@ -55,3 +55,8 @@ TASK_ALLOC_W_BATT  = 0.5   # battery weight    (favours healthier drones)
 TASK_ALLOC_W_LOAD  = 0.3   # workload penalty  (discourages busy drones)
 # Drone health thresholds
 TASK_LOW_BATTERY   = 0.20  # energy below this → DroneStatus.LOW_BATTERY
+
+# ── Demo & Testing ────────────────────────────────────────────────────
+# If True, accelerates curriculum progression for fast interview demonstrations
+# without altering the actual SAC or environment mechanics.
+DEMO_FAST_CURRICULUM = True

@@ -821,8 +821,8 @@ class TrainingDashboard:
                 self._history_combo.setCurrentIndex(0)
                 
             self._history_combo.blockSignals(False)            
-            recent = self.h_rewards[-20:]
-            succ_rate = sum(1 for r in recent if r > 10) / max(1, len(recent)) * 100
+            recent_coords = self.h_coordination[-20:]
+            succ_rate = sum(1 for c in recent_coords if c >= 99.9) / max(1, len(recent_coords)) * 100
             self.h_success_rate.append(succ_rate)
             self.h_buffer.append(len(trainer.buf) if hasattr(trainer, "buf") else 0)
 
