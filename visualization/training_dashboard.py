@@ -415,7 +415,15 @@ class TrainingDashboard:
         return f
 
     def _build_episode_replay(self) -> QFrame:
-        f, lay = _panel("EPISODE REPLAY")
+        f = QFrame()
+        f.setProperty("role", "panel")
+        lay = QVBoxLayout(f)
+        lay.setContentsMargins(12, 10, 12, 10)
+        lay.setSpacing(6)
+        
+        self._replay_title = QLabel("EPISODE REPLAY")
+        self._replay_title.setStyleSheet(f"font-size: 11px; font-weight: 700; color: {TEXT}; letter-spacing: 0.5px;")
+        lay.addWidget(self._replay_title)
 
         # Top toggles
         top = QHBoxLayout()
@@ -476,12 +484,8 @@ class TrainingDashboard:
         self._map_targets = pg.ScatterPlotItem(size=16, pen=pg.mkPen(None), symbol="star")
         self._map_obstacles = pg.ScatterPlotItem(pxMode=False)
         
-        self._map_ep_label = pg.TextItem(text="", color=TEXT, anchor=(0, 0))
-        self._map_ep_label.setPos(-9.5, 9.5)
-        
         self._map.addItem(self._map_targets)
         self._map.addItem(self._map_obstacles)
-        self._map.addItem(self._map_ep_label)
         
         self._drone_arrows = []
         for i in range(6):
@@ -641,7 +645,15 @@ class TrainingDashboard:
         with self._telemetry_lock:
             if getattr(self, "_current_buf", None) is None:
                 if self._replay_mode == "Live":
-                    self._current_buf = self._live_telemetry
+                    if not hasattr(self, "_live_play_idx"):
+                        self._live_play_idx = 0
+                        
+                    if self._live_play_idx < len(self._replay_history):
+                        self._current_buf = self._replay_history[self._live_play_idx]
+                        self._live_play_idx += 1
+                    else:
+                        self._current_buf = self._live_telemetry
+                        self._live_play_idx = len(self._replay_history) + 1
                 else:
                     idx = getattr(self, "_selected_history_idx", -1)
                     if 0 <= idx < len(self._replay_history):
@@ -727,7 +739,7 @@ class TrainingDashboard:
                 self._map_obstacles.setData(pos=np.empty((0,2)))
                 
             ep_idx = frame.get("ep", "?")
-            self._map_ep_label.setText(f"Episode: {ep_idx}")
+            self._replay_title.setText(f"EPISODE REPLAY - EPISODE {ep_idx}")
 
     def update_step(self):
         """Low-frequency (2fps) update for charts and stats."""
