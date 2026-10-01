@@ -289,6 +289,7 @@ class TrainingDashboard:
     def _capture_frame(self, env):
         frame = {
             "is_summary": False,
+            "ep": env.curriculum_ep,
             "wall_time": time.time(),
             "drones": [(d.pos.copy(), d.vel.copy(), d.alive) for d in env.drones],
             "targets": env.targets.copy(),
@@ -473,12 +474,14 @@ class TrainingDashboard:
             self._trails.append(curve)
 
         self._map_targets = pg.ScatterPlotItem(size=16, pen=pg.mkPen(None), symbol="star")
-        self._map_obstacles = pg.ScatterPlotItem(size=12, pen=pg.mkPen(None), symbol="x")
-        self._map_base = pg.ScatterPlotItem(size=18, pen=pg.mkPen(None), symbol="t")
+        self._map_obstacles = pg.ScatterPlotItem(pxMode=False)
+        
+        self._map_ep_label = pg.TextItem(text="", color=TEXT, anchor=(0, 0))
+        self._map_ep_label.setPos(-9.5, 9.5)
         
         self._map.addItem(self._map_targets)
         self._map.addItem(self._map_obstacles)
-        self._map.addItem(self._map_base)
+        self._map.addItem(self._map_ep_label)
         
         self._drone_arrows = []
         for i in range(6):
@@ -719,9 +722,12 @@ class TrainingDashboard:
             
             obs = frame.get("obstacles", [])
             if len(obs) > 0:
-                self._map_obstacles.setData(pos=np.array(obs), brush=pg.mkBrush(RED), pen=pg.mkPen(RED, width=1.5), size=12, symbol="x")
+                self._map_obstacles.setData(pos=np.array(obs), brush=pg.mkBrush(255, 69, 96, 50), pen=pg.mkPen(RED, width=1.5), size=4.0, symbol="o")
+            else:
+                self._map_obstacles.setData(pos=np.empty((0,2)))
                 
-            self._map_base.setData(pos=np.array([[0,0]]), brush=pg.mkBrush(TEXT3), size=18, symbol="t")
+            ep_idx = frame.get("ep", "?")
+            self._map_ep_label.setText(f"Episode: {ep_idx}")
 
     def update_step(self):
         """Low-frequency (2fps) update for charts and stats."""
