@@ -424,9 +424,19 @@ class TrainingDashboard:
         lay.setContentsMargins(12, 10, 12, 10)
         lay.setSpacing(6)
         
+        title_lay = QHBoxLayout()
+        title_lay.setContentsMargins(0, 0, 0, 0)
+        
         self._replay_title = QLabel("EPISODE REPLAY")
         self._replay_title.setStyleSheet(f"font-size: 11px; font-weight: 700; color: {TEXT}; letter-spacing: 0.5px;")
-        lay.addWidget(self._replay_title)
+        
+        self._curr_info_label = QLabel("")
+        self._curr_info_label.setStyleSheet(f"font-size: 11px; font-weight: 500; color: {TEXT3};")
+        
+        title_lay.addWidget(self._replay_title)
+        title_lay.addStretch()
+        title_lay.addWidget(self._curr_info_label)
+        lay.addLayout(title_lay)
 
         # Top toggles
         top = QHBoxLayout()
@@ -490,13 +500,9 @@ class TrainingDashboard:
         self._map_obstacles = pg.ScatterPlotItem(pxMode=False)
         self._map_dead = pg.ScatterPlotItem(size=14, pen=pg.mkPen(None), symbol="x")
         
-        self._map_curr_label = pg.TextItem(text="", color=TEXT3, anchor=(0, 0))
-        self._map_curr_label.setPos(-9.5, 9.5)
-        
         self._map.addItem(self._map_targets)
         self._map.addItem(self._map_obstacles)
         self._map.addItem(self._map_dead)
-        self._map.addItem(self._map_curr_label)
         
         self._drone_arrows = []
         for i in range(6):
@@ -646,27 +652,32 @@ class TrainingDashboard:
 
         if self._overlay_frames_left > 0:
             self._overlay_frames_left -= 1
+            if self._replay_mode == "Live":
+                with self._telemetry_lock:
+                    target_buf = self._replay_history[-1] if len(self._replay_history) > 0 else self._live_telemetry
+                    if getattr(self, "_current_buf", None) is not target_buf:
+                        self._overlay_frames_left = 0
             if self._overlay_frames_left == 0:
                 self._overlay_text.hide()
-                # Force switch to latest buffer on resume
                 self._current_buf = None
                 self._playback_frame = 0
-            return
+            if self._overlay_frames_left > 0:
+                return
 
         with self._telemetry_lock:
-            if getattr(self, "_current_buf", None) is None:
-                if self._replay_mode == "Live":
-                    if len(self._replay_history) > 0:
-                        self._current_buf = self._replay_history[-1]
-                    else:
-                        self._current_buf = self._live_telemetry
-                else:
+            if self._replay_mode == "Live":
+                target_buf = self._replay_history[-1] if len(self._replay_history) > 0 else self._live_telemetry
+                if getattr(self, "_current_buf", None) is not target_buf:
+                    self._current_buf = target_buf
+                    self._playback_frame = 0
+            else:
+                if getattr(self, "_current_buf", None) is None:
                     idx = getattr(self, "_selected_history_idx", -1)
                     if 0 <= idx < len(self._replay_history):
                         self._current_buf = self._replay_history[idx]
                     else:
                         self._current_buf = []
-                self._playback_frame = 0
+                    self._playback_frame = 0
 
             buf = self._current_buf
             if not buf:
@@ -757,7 +768,7 @@ class TrainingDashboard:
             phase = frame.get("phase", 0)
             n_obs = frame.get("n_obs", 0)
             f_prob = frame.get("f_prob", 0.0)
-            self._map_curr_label.setText(f"Curriculum Phase: {phase} | Obstacles: {n_obs} | Fail Prob: {f_prob*100:.0f}%")
+            self._curr_info_label.setText(f"Curriculum Phase: {phase} | Obstacles: {n_obs} | Fail Prob: {f_prob*100:.0f}%")
 
     def update_step(self):
         """Low-frequency (2fps) update for charts and stats."""
