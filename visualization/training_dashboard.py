@@ -290,6 +290,9 @@ class TrainingDashboard:
         frame = {
             "is_summary": False,
             "ep": env.curriculum_ep,
+            "phase": env._curriculum_phase() if hasattr(env, "_curriculum_phase") else 0,
+            "n_obs": env._n_obstacles() if hasattr(env, "_n_obstacles") else 0,
+            "f_prob": env._failure_prob() if hasattr(env, "_failure_prob") else 0.0,
             "wall_time": time.time(),
             "drones": [(d.pos.copy(), d.vel.copy(), d.alive) for d in env.drones],
             "targets": env.targets.copy(),
@@ -452,7 +455,9 @@ class TrainingDashboard:
         
         def _on_combo_change(idx):
             if idx > 0:
-                _set_mode("History", idx - 1)
+                history_idx = self._history_combo.itemData(idx)
+                if history_idx is not None:
+                    _set_mode("History", history_idx)
                 
         self._history_combo.currentIndexChanged.connect(_on_combo_change)
         
@@ -483,9 +488,15 @@ class TrainingDashboard:
 
         self._map_targets = pg.ScatterPlotItem(size=16, pen=pg.mkPen(None), symbol="star")
         self._map_obstacles = pg.ScatterPlotItem(pxMode=False)
+        self._map_dead = pg.ScatterPlotItem(size=14, pen=pg.mkPen(None), symbol="x")
+        
+        self._map_curr_label = pg.TextItem(text="", color=TEXT3, anchor=(0, 0))
+        self._map_curr_label.setPos(-9.5, 9.5)
         
         self._map.addItem(self._map_targets)
         self._map.addItem(self._map_obstacles)
+        self._map.addItem(self._map_dead)
+        self._map.addItem(self._map_curr_label)
         
         self._drone_arrows = []
         for i in range(6):
@@ -645,15 +656,10 @@ class TrainingDashboard:
         with self._telemetry_lock:
             if getattr(self, "_current_buf", None) is None:
                 if self._replay_mode == "Live":
-                    if not hasattr(self, "_live_play_idx"):
-                        self._live_play_idx = 0
-                        
-                    if self._live_play_idx < len(self._replay_history):
-                        self._current_buf = self._replay_history[self._live_play_idx]
-                        self._live_play_idx += 1
+                    if len(self._replay_history) > 0:
+                        self._current_buf = self._replay_history[-1]
                     else:
                         self._current_buf = self._live_telemetry
-                        self._live_play_idx = len(self._replay_history) + 1
                 else:
                     idx = getattr(self, "_selected_history_idx", -1)
                     if 0 <= idx < len(self._replay_history):
@@ -700,6 +706,7 @@ class TrainingDashboard:
                     
             # Drones
             import math
+            dead_pts = []
             for i, (pos, vel, alive) in enumerate(frame["drones"]):
                 if i < len(self._drone_arrows):
                     arrow = self._drone_arrows[i]
@@ -716,6 +723,12 @@ class TrainingDashboard:
                         arrow.show()
                     else:
                         arrow.hide()
+                        dead_pts.append(pos)
+                        
+            if dead_pts:
+                self._map_dead.setData(pos=np.array(dead_pts), brush=pg.mkBrush(TEXT3), pen=pg.mkPen(RED, width=2), size=14, symbol="x")
+            else:
+                self._map_dead.setData(pos=np.empty((0,2)))
                 
             # Env features
             tgts = frame.get("targets", [])
@@ -740,6 +753,11 @@ class TrainingDashboard:
                 
             ep_idx = frame.get("ep", "?")
             self._replay_title.setText(f"EPISODE REPLAY - EPISODE {ep_idx}")
+            
+            phase = frame.get("phase", 0)
+            n_obs = frame.get("n_obs", 0)
+            f_prob = frame.get("f_prob", 0.0)
+            self._map_curr_label.setText(f"Curriculum Phase: {phase} | Obstacles: {n_obs} | Fail Prob: {f_prob*100:.0f}%")
 
     def update_step(self):
         """Low-frequency (2fps) update for charts and stats."""
@@ -766,14 +784,32 @@ class TrainingDashboard:
         with self._telemetry_lock:
             n_hist = len(self._replay_history)
             
-        if self._history_combo.count() - 1 < n_hist:
-            current_count = self._history_combo.count() - 1
-            for i in range(current_count, n_hist):
-                # Safely get the episode number from the summary frame, which is the last element
-                ep_data = self._replay_history[i][-1]
-                ep_num = ep_data.get("ep", "?")
-                self._history_combo.addItem(f"Episode {ep_num}")
+        if n_hist > getattr(self, "_last_combo_hist", 0):
+            self._last_combo_hist = n_hist
             
+            # Save current selection
+            current_idx = self._history_combo.currentIndex()
+            current_data = self._history_combo.itemData(current_idx) if current_idx > 0 else None
+            
+            self._history_combo.blockSignals(True)
+            self._history_combo.clear()
+            self._history_combo.addItem("Select Past Episode...", userData=None)
+            
+            latest_ep = self._replay_history[n_hist - 1][-1].get("ep", "?")
+            self._history_combo.addItem(f"Latest (Ep {latest_ep})", userData=n_hist - 1)
+            
+            for i in range(n_hist):
+                ep_num = self._replay_history[i][-1].get("ep", "?")
+                if isinstance(ep_num, int) and (ep_num == 1 or ep_num % 5 == 0) and i != n_hist - 1:
+                    self._history_combo.addItem(f"Episode {ep_num}", userData=i)
+                    
+            if current_data is not None:
+                idx = self._history_combo.findData(current_data)
+                self._history_combo.setCurrentIndex(idx if idx >= 0 else 0)
+            else:
+                self._history_combo.setCurrentIndex(0)
+                
+            self._history_combo.blockSignals(False)            
             recent = self.h_rewards[-20:]
             succ_rate = sum(1 for r in recent if r > 10) / max(1, len(recent)) * 100
             self.h_success_rate.append(succ_rate)
