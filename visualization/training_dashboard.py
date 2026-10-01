@@ -424,17 +424,16 @@ class TrainingDashboard:
         lay.setContentsMargins(12, 10, 12, 10)
         lay.setSpacing(6)
         
-        title_lay = QHBoxLayout()
+        title_lay = QVBoxLayout()
         title_lay.setContentsMargins(0, 0, 0, 0)
         
-        self._replay_title = QLabel("EPISODE REPLAY")
+        self._replay_title = QLabel("EPISODE REPLAY — EPISODE -")
         self._replay_title.setStyleSheet(f"font-size: 11px; font-weight: 700; color: {TEXT}; letter-spacing: 0.5px;")
         
-        self._curr_info_label = QLabel("")
+        self._curr_info_label = QLabel("Curriculum Phase: - | Obstacles: - | Fail Prob: - | Frame: -")
         self._curr_info_label.setStyleSheet(f"font-size: 11px; font-weight: 500; color: {TEXT3};")
         
         title_lay.addWidget(self._replay_title)
-        title_lay.addStretch()
         title_lay.addWidget(self._curr_info_label)
         lay.addLayout(title_lay)
 
@@ -653,10 +652,9 @@ class TrainingDashboard:
         if self._overlay_frames_left > 0:
             self._overlay_frames_left -= 1
             if self._replay_mode == "Live":
-                with self._telemetry_lock:
-                    target_buf = self._replay_history[-1] if len(self._replay_history) > 0 else self._live_telemetry
-                    if getattr(self, "_current_buf", None) is not target_buf:
-                        self._overlay_frames_left = 0
+                # Instantly clear overlay if user clicks Live
+                self._overlay_frames_left = 0
+                
             if self._overlay_frames_left == 0:
                 self._overlay_text.hide()
                 self._current_buf = None
@@ -666,9 +664,11 @@ class TrainingDashboard:
 
         with self._telemetry_lock:
             if self._replay_mode == "Live":
-                target_buf = self._replay_history[-1] if len(self._replay_history) > 0 else self._live_telemetry
-                if getattr(self, "_current_buf", None) is not target_buf:
-                    self._current_buf = target_buf
+                buf = self._live_telemetry
+                self._current_buf = buf
+                if buf:
+                    self._playback_frame = len(buf) - 1
+                else:
                     self._playback_frame = 0
             else:
                 if getattr(self, "_current_buf", None) is None:
@@ -678,21 +678,21 @@ class TrainingDashboard:
                     else:
                         self._current_buf = []
                     self._playback_frame = 0
-
+                    
             buf = self._current_buf
             if not buf:
                 return
 
-            if self._playback_frame < len(buf) - 1:
-                self._playback_frame += 1
-            else:
-                # We are at the end of the available buffer
-                frame = buf[self._playback_frame]
-                if frame.get("is_summary"):
-                    self._show_summary_overlay(frame)
-                    self._overlay_frames_left = int(2000 / 60) # ~2 seconds
-                    return
-                # If it's not a summary, we are just waiting for the live buffer to grow
+            if self._replay_mode != "Live":
+                if self._playback_frame < len(buf) - 1:
+                    self._playback_frame += 1
+                else:
+                    # We are at the end of the available buffer
+                    frame = buf[self._playback_frame]
+                    if frame.get("is_summary"):
+                        self._show_summary_overlay(frame)
+                        self._overlay_frames_left = int(2000 / 60) # ~2 seconds
+                        return
                 
             frame = buf[self._playback_frame]
             if frame.get("is_summary"):
@@ -768,7 +768,7 @@ class TrainingDashboard:
             phase = frame.get("phase", 0)
             n_obs = frame.get("n_obs", 0)
             f_prob = frame.get("f_prob", 0.0)
-            self._curr_info_label.setText(f"Curriculum Phase: {phase} | Obstacles: {n_obs} | Fail Prob: {f_prob*100:.0f}%")
+            self._curr_info_label.setText(f"Curriculum Phase: {phase} | Obstacles: {n_obs} | Fail Prob: {f_prob*100:.0f}% | Frame: {self._playback_frame}/{len(buf)-1}")
 
     def update_step(self):
         """Low-frequency (2fps) update for charts and stats."""
